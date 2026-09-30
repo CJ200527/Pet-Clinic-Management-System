@@ -1,0 +1,46 @@
+/* sidebar.css — left nav shell (vet-teal theme). No emoji icons: use the SVG sprite. */
+:root {
+  --vet: #0f766e;
+  --vet2: #14b8a6;
+  --side-bg: #0d2421;
+  --side-bg2: #123331;
+  --side-text: #cfe3de;
+  --side-muted: #8fb3ad;
+}
+.shell { display: flex; min-height: 100vh; background: #f4f6f5; }
+.sidebar { width: 264px; flex: none; background: var(--side-bg); color: var(--side-text);
+  display: flex; flex-direction: column; padding: 1.4rem 1.1rem; gap: 1.1rem;
+  position: sticky; top: 0; height: 100vh; border-radius: 0 1.4rem 1.4rem 0; }
+.brand { display: flex; align-items: center; gap: .6rem; color: #fff;
+  font-family: Georgia, serif; font-size: 1.25rem; text-decoration: none; }
+.brand .ic { width: 30px; height: 30px; color: var(--vet2); }
+.profile { display: flex; align-items: center; gap: .7rem; }
+.avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--vet);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; font-weight: 700; flex: none; }
+.profile strong { display: block; color: #fff; font-size: .95rem; }
+.profile small { color: var(--side-muted); text-transform: capitalize; }
+.snav { display: flex; flex-direction: column; gap: .35rem; }
+.snav a { display: flex; align-items: center; gap: .75rem; padding: .7rem 1rem;
+  border-radius: .9rem; color: var(--side-text); text-decoration: none; font-weight: 500; }
+.snav a:hover { background: var(--side-bg2); color: #fff; }
+.snav a.active { background: linear-gradient(135deg, var(--vet), var(--vet2)); color: #fff; }
+.snav .ic { width: 20px; height: 20px; flex: none; }
+.side-foot { margin-top: auto; }
+.logout-btn { display: flex; align-items: center; justify-content: center; gap: .6rem;
+  background: #fff; color: #122826; font-weight: 600; border-radius: .9rem;
+  padding: .7rem; text-decoration: none; }
+.logout-btn:hover { background: var(--vet2); color: #fff; }
+.logout-btn .ic { width: 20px; height: 20px; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mobilebar { display: none; align-items: center; gap: .7rem; padding: .7rem 1rem;
+  background: var(--side-bg); color: #fff; position: sticky; top: 0; z-index: 1030; }
+.mobilebar button { background: none; border: none; color: #fff; padding: .25rem; }
+.mobilebar .ic { width: 24px; height: 24px; }
+.content { padding: 1.5rem clamp(1rem, 3vw, 2rem); }
+@media (max-width: 767px) {
+  .sidebar { position: fixed; left: 0; top: 0; z-index: 1040; border-radius: 0 1.4rem 1.4rem 0;
+    transform: translateX(-105%); transition: transform .3s ease; }
+  .shell.nav-open .sidebar { transform: none; }
+  .mobilebar { display: flex; }
+}

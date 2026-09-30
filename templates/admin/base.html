@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Admin - Pet Clinic{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/sidebar.css') }}" rel="stylesheet">
+</head>
+<body>
+{% include "_sprite.html" %}
+{% set ep = request.endpoint %}
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('admin_dashboard') }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-paw"></use></svg>
+      <span>Paws &amp; Care</span>
+    </a>
+    <div class="profile">
+      <div class="avatar">{{ (session.get('full_name') or '?')[:1] }}</div>
+      <div><strong>{{ session.get('full_name', 'Admin') }}</strong><small>{{ session.get('role', '') }}</small></div>
+    </div>
+    {% if session.role == 'staff' %}
+    <div class="alert alert-info py-1 px-2 mb-0"><small>View-only mode — approvals by Admin.</small></div>
+    {% endif %}
+    <nav class="snav">
+      <a href="{{ url_for('admin_dashboard') }}" class="{{ 'active' if ep in ('admin_dashboard',) else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-dashboard"></use></svg><span>Dashboard</span></a>
+      <a href="{{ url_for('admin_appointments') }}" class="{{ 'active' if ep in ('admin_appointments', 'admin_appointment_status') else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg><span>Appointments</span></a>
+      {% if session.role == 'admin' %}
+      <a href="{{ url_for('admin_users') }}" class="{{ 'active' if ep in ('admin_users', 'admin_user_delete') else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg><span>Users</span></a>
+      {% endif %}
+      <a href="{{ url_for('admin_queue') }}" class="{{ 'active' if ep in ('admin_queue', 'admin_queue_status') else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-queue"></use></svg><span>Queue</span></a>
+      <a href="{{ url_for('admin_inventory') }}" class="{{ 'active' if ep in ('admin_inventory', 'admin_inventory_edit', 'admin_inventory_delete') else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg><span>Inventory</span></a>
+      <a href="{{ url_for('admin_invoices') }}" class="{{ 'active' if ep in ('admin_invoices', 'admin_invoice_status') else '' }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-receipt"></use></svg><span>Invoices</span></a>
+    </nav>
+    <div class="side-foot">
+      <a class="logout-btn" href="{{ url_for('logout') }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-logout"></use></svg><span>Logout</span></a>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="mobilebar">
+      <button id="navToggle" aria-label="Menu"><svg class="ic" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+      <strong>Paws &amp; Care · Admin</strong>
+    </div>
+    <main class="content">{% block content %}{% endblock %}</main>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
+</body>
+</html>

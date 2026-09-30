@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+{% block title %}Inventory - Admin - Pet Clinic{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>Inventory</h3>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <div class="row g-3">
+    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body">
+      <h5>Add Item</h5>
+      {% if session.role == 'admin' %}
+      <form method="POST" action="{{ url_for('admin_inventory') }}">
+        <div class="mb-2"><label class="form-label">Item name</label>
+          <input type="text" name="item_name" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label">Category</label>
+          <select name="category" class="form-select">
+            {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+          </select></div>
+        <div class="row">
+          <div class="col-6 mb-2"><label class="form-label">Qty</label>
+            <input type="number" name="quantity" value="0" min="0" class="form-control"></div>
+          <div class="col-6 mb-2"><label class="form-label">Price</label>
+            <input type="number" name="price" value="0" min="0" step="0.01" class="form-control"></div>
+        </div>
+        <div class="mb-3"><label class="form-label">Expiry (optional)</label>
+          <input type="date" name="expiry_date" class="form-control"></div>
+        <button class="btn btn-primary w-100">Add</button>
+      </form>
+      {% else %}<p class="text-muted mb-0">New stock is added by Admin.</p>{% endif %}
+    </div></div></div>
+    <div class="col-md-8"><div class="card shadow-sm"><div class="card-body">
+      <h5>Stock ({{ items|length }})</h5>
+      {% if items %}
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th>
+          {% if session.role == 'admin' %}<th></th>{% endif %}</tr></thead>
+        <tbody>{% for i in items %}
+          <tr><td>{{ i.item_name }}</td><td>{{ i.category }}</td>
+              <td><span class="badge bg-{{ 'danger' if i.quantity <= 5 else 'secondary' }}">{{ i.quantity }}</span></td>
+              <td>₱{{ i.price }}</td><td>{{ i.expiry_date or '-' }}</td>
+              {% if session.role == 'admin' %}
+              <td class="text-end d-flex gap-1 justify-content-end">
+                <a href="{{ url_for('admin_inventory_edit', item_id=i.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                <form method="POST" action="{{ url_for('admin_inventory_delete', item_id=i.id) }}"
+                      onsubmit="return confirm('Delete {{ i.item_name }}?')">
+                  <button class="btn btn-sm btn-outline-danger">Del</button>
+                </form>
+              </td>
+              {% endif %}</tr>
+        {% endfor %}</tbody>
+      </table>
+      {% else %}<p class="text-muted mb-0">No items yet.</p>{% endif %}
+    </div></div></div>
+  </div>
+</div>
+{% endblock %}

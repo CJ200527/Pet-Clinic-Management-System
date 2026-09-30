@@ -1,0 +1,52 @@
+{% extends "admin/base.html" %}
+{% block title %}Users - Admin - Pet Clinic{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>Users <small class="text-muted">— accounts are created here only</small></h3>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <div class="row g-3">
+    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body">
+      <h5>Create User</h5>
+      <form method="POST" action="{{ url_for('admin_users') }}" autocomplete="off">
+        <div class="mb-2"><label class="form-label">Full Name</label>
+          <input type="text" name="full_name" class="form-control" required></div>
+        <div class="mb-2"><label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" required autocomplete="off"></div>
+        <div class="mb-2"><label class="form-label">Email (optional)</label>
+          <input type="email" name="email" class="form-control" autocomplete="off"></div>
+        <div class="row">
+          <div class="col-6 mb-2"><label class="form-label">Role</label>
+            <select name="role" class="form-select">
+              {% for r in roles %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+            </select></div>
+          <div class="col-6 mb-3"><label class="form-label">Password</label>
+            <input type="password" name="password" class="form-control" required autocomplete="new-password"></div>
+        </div>
+        <button class="btn btn-primary w-100">Create</button>
+      </form>
+    </div></div></div>
+    <div class="col-md-8"><div class="card shadow-sm"><div class="card-body">
+      <h5>Accounts ({{ users|length }})</h5>
+      <table class="table table-sm align-middle">
+        <thead><tr><th>Username</th><th>Name</th><th>Role</th><th></th></tr></thead>
+        <tbody>{% for u in users %}
+          <tr><td><strong>{{ u.username }}</strong></td><td>{{ u.full_name }}</td>
+              <td><span class="badge bg-secondary">{{ u.role }}</span></td>
+              <td class="text-end">
+                {% if u.id != session.get('user_id') %}
+                <form method="POST" action="{{ url_for('admin_user_delete', user_id=u.id) }}"
+                      onsubmit="return confirm('Delete {{ u.username }}?')">
+                  <button class="btn btn-sm btn-outline-danger">Del</button>
+                </form>
+                {% else %}<small class="text-muted">you</small>{% endif %}
+              </td></tr>
+        {% endfor %}</tbody>
+      </table>
+    </div></div></div>
+  </div>
+</div>
+{% endblock %}

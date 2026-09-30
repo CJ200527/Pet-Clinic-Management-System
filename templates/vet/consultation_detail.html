@@ -1,0 +1,57 @@
+{% extends "vet/base.html" %}
+{% block title %}Consultation #{{ consult.id }} - Pet Clinic{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3>Consultation #{{ consult.id }} — {{ consult.pet_name }}</h3>
+  <p class="text-muted">{{ consult.consultation_date }}</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <div class="row g-3">
+    <div class="col-md-6"><div class="card shadow-sm"><div class="card-body">
+      <h5>Diagnosis</h5><p>{{ consult.diagnosis }}</p>
+      <h5>Treatment</h5><p>{{ consult.treatment or '-' }}</p>
+      <h5>Notes</h5><p>{{ consult.notes or '-' }}</p>
+    </div></div></div>
+    <div class="col-md-6"><div class="card shadow-sm"><div class="card-body">
+      <h5>Prescriptions / Treatments</h5>
+      {% if rxs %}
+      <ul class="list-group mb-3">
+        {% for r in rxs %}
+        <li class="list-group-item">
+          <strong>{{ r.item_name or 'General treatment' }}</strong> × {{ r.quantity_used }}
+          {% if r.dosage %}<span class="text-muted">({{ r.dosage }})</span>{% endif %}
+          {% if r.instructions %}<br><small>{{ r.instructions }}</small>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="text-muted">None yet.</p>{% endif %}
+      {% if can_edit %}
+      <hr><h6>Add Prescription</h6>
+      <form method="POST" action="{{ url_for('vet_consultation_detail', consult_id=consult.id) }}">
+        <div class="mb-2"><label class="form-label">Inventory item (optional)</label>
+          <select name="inventory_id" class="form-select">
+            <option value="">-- none (general treatment) --</option>
+            {% for i in items %}
+            <option value="{{ i.id }}">{{ i.item_name }} ({{ i.quantity }} left)</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Stock is deducted automatically.</div></div>
+        <div class="row">
+          <div class="col-6 mb-2"><label class="form-label">Dosage</label>
+            <input type="text" name="dosage" class="form-control" placeholder="e.g. 2x daily"></div>
+          <div class="col-6 mb-2"><label class="form-label">Qty</label>
+            <input type="number" name="quantity_used" value="1" min="1" class="form-control"></div>
+        </div>
+        <div class="mb-2"><label class="form-label">Instructions</label>
+          <textarea name="instructions" class="form-control" rows="2"></textarea></div>
+        <button class="btn btn-success w-100">Add</button>
+      </form>
+      {% endif %}
+    </div></div></div>
+  </div>
+  <a href="{{ url_for('vet_consultations') }}" class="btn btn-link mt-2">← Back to list</a>
+</div>
+{% endblock %}

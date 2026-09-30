@@ -1,0 +1,105 @@
+/* landing.css — Pet Clinic booking landing page.
+   Adapted from EAVS Homestay Telly layout language (same class names),
+   re-paletted to clinical teal. pictures/ holds originals (do-not-edit);
+   static/images/ holds web copies. */
+:root {
+  --vet: #0f766e;
+  --vet2: #14b8a6;
+  --cream: #fff8ec;
+  --wood: #c8a97e;
+  --ink: #1a2a3a;
+  --gray: #f4f1ea;
+  --accent: #ffe9bd;
+  --line: #e9e2d5;
+  --muted: #6b7a8d;
+}
+
+body { font-family: 'Segoe UI', Arial, sans-serif; color: var(--ink); }
+h1, h2, h3, .serif { font-family: Georgia, 'Times New Roman', serif; }
+.eyebrow { text-transform: uppercase; letter-spacing: 3px; font-size: .8rem; color: var(--vet2); font-weight: 700; }
+
+/* Navbar */
+.vet-nav { background: #fff; border-bottom: 1px solid var(--line); }
+.vet-nav .navbar-brand { color: var(--vet); font-family: Georgia, serif; font-size: 1.4rem; }
+.vet-nav .nav-link { text-transform: uppercase; font-size: .82rem; letter-spacing: 1.2px; color: var(--ink); }
+.vet-nav .nav-link:hover { color: var(--vet2); }
+.navbar-toggler { background: var(--vet); }
+
+/* Buttons */
+.btn-pill { border-radius: 50px; padding: .7rem 1.6rem; font-weight: 600; }
+.btn-arrow span::after { content: ' \2192'; }
+.btn-vet { background: var(--vet); color: #fff; border: 1px solid var(--vet); }
+.btn-vet:hover { background: var(--vet2); border-color: var(--vet2); color: #fff; }
+.btn-outline-cream { border: 1px solid #fff; color: #fff; }
+.btn-outline-cream:hover { background: #fff; color: var(--vet); }
+.btn-outline-ink { border: 1px solid var(--ink); color: var(--ink); }
+.btn-outline-ink:hover { background: var(--ink); color: #fff; }
+
+/* Hero */
+.telly-hero { position: relative; min-height: 78vh; display: flex; align-items: center; color: #fff; overflow: hidden; }
+.telly-hero img.bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.telly-hero .overlay { position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(6,60,54,.85), rgba(15,118,110,.45)); }
+.telly-hero .content { position: relative; z-index: 2; }
+.banner-title { font-size: clamp(2.2rem, 5vw, 4rem); }
+
+/* Sections */
+.section { padding: 4rem 0; }
+.section-gray { background: var(--gray); }
+.hero-cream { background: var(--cream); border: 2px solid var(--wood); border-radius: 1rem; }
+.gallery img { aspect-ratio: 4/3; object-fit: cover; background: var(--gray); border-radius: .6rem; width: 100%; }
+
+/* Service cards */
+.svc-card { border: 1px solid var(--line); border-radius: .6rem; background: #fff; overflow: hidden; }
+.svc-card img { height: 220px; width: 100%; object-fit: cover; }
+.amenity { border: 1px solid var(--line); border-radius: .7rem; padding: 1.1rem; text-align: center; background: #fff; }
+.amenity .ic { font-size: 1.6rem; }
+
+/* Spec table + stats */
+.spec-table { font-size: .9rem; width: 100%; }
+.spec-table td { padding: .25rem 0; }
+.spec-table td:first-child { color: var(--muted); }
+.spec-table .price { color: var(--vet); font-weight: 800; }
+.stat-num { font-family: Georgia, serif; font-size: 2rem; color: var(--vet); }
+
+/* Booking bar */
+.booking-bar { background: #fff; border-radius: 1rem; box-shadow: 0 .5rem 1.5rem rgba(15,118,110,.12); padding: 1.5rem; }
+.booking-bar label { text-transform: uppercase; font-size: .72rem; letter-spacing: 1.5px; color: var(--muted); }
+
+/* Split image */
+.split-img { width: 100%; height: 100%; min-height: 340px; object-fit: cover; }
+
+/* Footer */
+.vet-footer { background: var(--vet); color: #fff; }
+.vet-footer a { color: var(--accent); text-decoration: none; }
+.vet-footer a:hover { text-decoration: underline; }
+.vet-footer .btn-light { color: var(--vet) !important; }
+
+/* Login curtain: full-page roll-down (ported from EAVS adminCurtain) */
+#loginCurtain { position: fixed; inset: 0; z-index: 2000; transform: translateY(-102%);
+  transition: transform .55s ease, visibility 0s .6s; visibility: hidden;
+  overflow: hidden; pointer-events: none; display: flex; align-items: center;
+  justify-content: center; padding: 4vh 1rem 2rem; }
+#loginCurtain.open { transform: translateY(0); visibility: visible;
+  pointer-events: auto; transition: transform .55s ease; }
+#loginCurtain.closing { transform: translateY(-102%); visibility: visible;
+  pointer-events: none; transition: transform .55s ease, visibility 0s .6s; }
+#loginCurtain .curtain-bg { position: absolute; inset: -2% 0 0 0;
+  background: url('../images/668105126_2516458012117969_1397912013581742414_n.png') center/cover;
+  filter: blur(6px) brightness(.75); }
+#loginCurtain .curtain-shade { position: absolute; inset: 0;
+  background: linear-gradient(120deg, rgba(6,60,54,.85), rgba(15,118,110,.55)); }
+#loginCurtain .curtain-card { position: relative; max-width: 420px;
+  width: min(420px, calc(100% - 2rem)); background: #fff; border-radius: 1rem;
+  padding: 2.2rem; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  max-height: 86vh; overflow: auto; }
+body.curtain-lock { overflow: hidden; }
+
+/* Auth error popup (decision modal over the curtain) */
+#authPopup { position: fixed; inset: 0; z-index: 3000; display: none;
+  align-items: center; justify-content: center; background: rgba(26,42,58,.55); }
+#authPopup.open { display: flex; }
+#authPopup .popup-box { background: #fff; border-radius: 1rem; padding: 2rem;
+  width: min(360px, calc(100% - 2rem)); text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+#authPopup .popup-ic { font-size: 2.2rem; }
