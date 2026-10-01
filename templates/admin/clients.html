@@ -1,0 +1,55 @@
+{% extends "admin/base.html" %}
+{% block title %}Clients - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "Clients" %}
+{% include "admin/_page_header.html" %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+  <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg></span>
+      <div><div class="kpi-title">Total Clients</div><div class="kpi-value">{{ ckpi.total }}</div></div>
+    </div><div class="kpi-sub">{{ period }} · on record</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+      <div><div class="kpi-title">Active Clients</div><div class="kpi-value">{{ ckpi.active }}</div></div>
+    </div><div class="kpi-sub">Booked in period</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg></span>
+      <div><div class="kpi-title">New Clients</div><div class="kpi-value">{{ ckpi.new }}</div></div>
+    </div><div class="kpi-sub">First seen in period</div></div>
+  </div>
+
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_clients') }}" class="search-box">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="text" name="q" class="form-control" placeholder="Search name or phone…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List" href="{{ url_for('admin_clients', period=period, q=q) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="bar-spacer"></div>
+    <a class="btn-add" href="{{ url_for('admin_walkin') }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Walk-in</a>
+  </div>
+
+  <div class="card shadow-sm"><div class="card-body">
+    {% if rows %}
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Name</th><th>Phone</th><th>Pets</th><th>Visits</th>
+        <th class="text-end">Actions</th></tr></thead>
+      <tbody>{% for c in rows %}
+        <tr><td><strong>{{ c.full_name }}</strong></td><td>{{ c.phone or '-' }}</td>
+            <td>{{ c.pets }}</td><td>{{ c.visits }}</td>
+            <td class="action-cell"><a href="{{ url_for('admin_client_detail', owner_id=c.id) }}"
+               class="icon-act icon-view" title="View record">
+                <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></a></td></tr>
+      {% endfor %}</tbody>
+    </table>
+    {% else %}<p class="text-muted mb-0">No clients found. Guest bookings and walk-ins appear here.</p>{% endif %}
+  </div></div>
+{% endblock %}

@@ -1,7 +1,9 @@
-{% extends "vet/base.html" %}
+{% extends "admin/base.html" %}
 {% block title %}Log Consultation - Pet Clinic{% endblock %}
 {% block content %}
-<div class="container py-4">
+{% set page_title = "Log Consultation" %}
+{% set show_filter = False %}
+{% include "admin/_page_header.html" %}
   <div class="row justify-content-center"><div class="col-md-7">
     <div class="card shadow-sm"><div class="card-body p-4">
       <h3>Log Consultation</h3>
@@ -12,7 +14,7 @@
         {% endfor %}
       {% endwith %}
       {% if eligible %}
-      <form method="POST" action="{{ url_for('vet_consultation_new') }}">
+      <form method="POST" action="{{ url_for('admin_consultation_new') }}">
         <div class="mb-3"><label class="form-label">Appointment</label>
           <select name="appointment_id" class="form-select" required>
             {% for a in eligible %}
@@ -25,11 +27,14 @@
           <textarea name="treatment" class="form-control" rows="2"></textarea></div>
         <div class="mb-3"><label class="form-label">Notes</label>
           <textarea name="notes" class="form-control" rows="2"></textarea></div>
+        <div class="mb-3"><label class="form-label">Bill Amount (₱, optional)</label>
+          <input type="number" name="bill_amount" min="0" step="0.01" class="form-control"
+                 placeholder="Leave 0 for no bill — otherwise an unpaid bill is issued">
+          <div class="form-text">Filled = auto-issues an unpaid bill for this visit.</div></div>
         <button class="btn btn-success w-100">Save Consultation</button>
       </form>
       {% else %}<div class="alert alert-warning mb-0">No approved appointments to consult.</div>{% endif %}
-      <a href="{{ url_for('vet_consultations') }}" class="btn btn-link mt-2">← Back to list</a>
+      <a href="{{ url_for('admin_consultations') }}" class="btn btn-link mt-2">← Back to list</a>
     </div></div>
   </div></div>
-</div>
 {% endblock %}

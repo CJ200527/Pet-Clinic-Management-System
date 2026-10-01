@@ -1,6 +1,71 @@
 # SESSION.md — AI Continuity Log (read this every new session)
 
-## Last Done (2026-09-30 — shared dashboard)
+## Last Done (2026-10-01 — chart fill + swap revert)
+- Reverted the header/strip color swap per user call; charts fill cards
+  (aspect lock off, thicker bars, centered pie); Revenue ↔ Top Services swapped.
+- Page headers take the bold teal gradient (white text/avatar/pill); strip takes
+  the light card style; analytics grid 70/30; toggle restyled for light strip.
+  Verified all shells render.
+- Dashboard charts wired to real data (adaptive buckets, zero-filled; verified
+  against DB counts), Now-Serving strip + next-2 below KPIs, 30s auto-refresh
+  with own toggle key. Staff sees strip + charts.
+- `users.status` migration live (existing approved); login gates on status.
+- Users page on concept: 5 KPIs, Period/Status funnel, Create modal,
+  approve/reject icons. Verified full lifecycle; test user cleaned.
+- Invoices on page concept (Period/Status funnel, Issue modal, print icons,
+  full-height table); consult amount auto-issues linked unpaid bill; receipt
+  view with PAID stamp. Verified auto-bill + receipt; test rows cleaned.
+- Fixed Items KPI rendering raw dict method text (key collision, renamed).
+- Inventory now follows page concept: funnel (Period + Category), Add Item modal,
+  full-width table. Verified count, modal, funnel, Staff view.
+- Pets funnel (Period + Species folded in); walk-in is now a history page
+  (Total/Today KPIs, search, Period/Status funnel, queue numbers, modal create).
+- `appointments.source` migration live (guest/walkin stamped; old rows = guest).
+- Verified: modal walk-in, history search, species filter; test rows cleaned.
+- Bar regrouped (funnel beside Log button), Log is now an in-page modal with
+  Cancel/Save, search-box stretch fixed globally. Verified modal save E2E.
+- Regrouped bar (search/refresh/funnel left, Log right), Period + Prescription
+  funnel, full-height table. Verified markup + rx filter select.
+- Queue is dashboard-like: Now-Serving strip + next-2 chips, 30s auto-refresh
+  with pause toggle, Period+Status funnel, full-height table. Verified markup,
+  filter select, staff view.
+- Slim list headers (bell-only); funnel+refresh moved beside Search; combined
+  Period+Status funnel panel on appointments (standalone status dropdown gone).
+- Roomier tables (padding, viewport-fill card, responsive scroll); fixed a
+  clinic.js brace bug that would have broken all panel toggles.
+- CPSC list-page law live on all 8 list pages: KPI row → action bar → badge table
+  with sprite icon buttons; appointments pilot verified (approve/reject/search),
+  then queue/consults/inventory/invoices/clients/pets/users replicated.
+- Staff view-only holds on all new buttons (queue-serve icons intentionally
+  staff-visible). Standing docs rule kept: CHANGELOG/README/AGENTS/SESSION updated.
+- Root cause of narrow pages found (my code, not browser): `.container py-4`
+  wrapper on all list/form pages. Unwrapped all 14; verified 9/9 full-width.
+- Full filter cluster on every list page header; period drives all 8 lists
+  (verified Today hides old rows); detail/form pages use slim header.
+- Bell via context processor everywhere admin-side; queue table shows dates.
+- Deleted owner-login surface (5 routes, `templates/client/`); owners are record
+  rows only. New: Clients list+profile (search, staff-editable), Pets registry
+  (filter, edit), Walk-in form (approved visit + optional queue).
+- Nav: Operations gains Clients, Pets, Walk-in. Verified: record flows for both
+  roles, guest booking green, test rows cleaned.
+- Shared header includes on all 13 pages (`admin/_page_header.html` with bell via
+  `inject_bell` processor; `client/_page_header.html` without); dashboard refactored
+  onto the include; clinic.js clock handles class-based clocks.
+- Sidebar: USERS group fully hidden for Staff, trailing group-label lines, logo +
+  logout dividers, `?v=` cache-bust everywhere (kills stale-CSS ghosts like the
+  appointments screenshot).
+- Verified: 8/8 admin + 4/4 client headers, Staff bell + no Users, view-only holds.
+- Vet-as-user deleted (6 routes, `templates/vet/` gone; vet = record-only name);
+  consultations now `/admin/*` shared (Admin+Staff), queue-serve opened to Staff.
+- Pending Approvals card off dashboard (ledger-only approvals); profile block off
+  all sidebars; client converted to sidebar+header+KPI shell (`client/base.html`).
+- Verified: 8/8 admin + 4/4 client pages in shells, vet URLs 404, Staff view-only
+  holds, guest booking green.
+- Admin dashboard rebuilt in CPSC pattern: header (label, live clock, period
+  filter, refresh, live-count bell, user block), 5 SVG KPI cards, 4 Chart.js
+  analytics frames (empty), period-driven KPIs/activity, grouped sidebar nav.
+- New `clinic.css`/`clinic.js`, sprite +8 symbols (CPSC geometry). AGENTS.md rule 7+8
+  (header law, sprite-only icons). Verified all markup + filter + staff view-only.
 - `staff` is now a real ENUM role (setup_db.py + live ALTER); Staff lands on the
   shared admin dashboard, keeps vet Queue/Consultations; Users page Admin-only.
 - Shared view: Pending Approvals card (Approve/Decline Admin-only), all list pages

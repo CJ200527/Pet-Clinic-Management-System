@@ -7,9 +7,12 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 > instructor requirement. PHP files were deleted; behavior was preserved 1:1.
 
 ## Roles
-- **Admin** — manage users, appointments, queue, inventory, billing
-- **Veterinarian / Staff** — appointments, queue, consultation logging
-- **Pet Owner (Client)** — pet registration, booking, queue status, invoices
+- **Admin** — full powers: approve, mutate, Users management
+- **Staff** — operates the system: shared dashboard (view-only), queue-serve,
+  consultation logging; no approve/delete/users
+- **Vet** — record-only name (assignable on bookings/consults, no login surface)
+- **Owner rows** — not logins: client records auto-made by guest/walk-in bookings
+  (phone dedupe), viewable + editable in Clients/Pets; shown on request
 
 ## Features
 - User / pet registration
@@ -22,7 +25,7 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 ## Project Structure
 ```
 .
-├── app.py                    # Flask app + routes (auth, guest booking, client, admin, vet)
+├── app.py                    # Flask app + routes (auth, guest booking, records, admin ops)
 ├── config.py                 # MySQL (XAMPP) connection + SECRET_KEY
 ├── requirements.txt          # flask, pymysql, bcrypt
 ├── database/
@@ -31,27 +34,26 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 ├── templates/
 │   ├── landing.html          # public booking landing page (EAVS Telly pattern + curtain + guest form)
 │   ├── _sprite.html          # inline SVG icon sprite (paw, dashboard, calendar, users…)
-│   ├── admin/base.html       # admin sidebar shell (logo, profile, buttons, logout)
-│   ├── vet/base.html         # vet sidebar shell
-│   ├── admin/dashboard.html
+│   ├── admin/base.html       # admin+staff sidebar shell (grouped nav, no profile)
+│   ├── admin/_page_header.html  # shared header card (label, clock, filter, bell, user)
+│   ├── admin/dashboard.html  # CPSC header + KPIs + chart frames + activity
 │   ├── admin/appointments.html
+│   ├── admin/consultations.html
+│   ├── admin/consultation_form.html
+│   ├── admin/consultation_detail.html
+│   ├── admin/clients.html    # client records: searchable list
+│   ├── admin/client_detail.html  # full client profile (pets, visits, bills)
+│   ├── admin/pets.html       # pet registry + edit
+│   ├── admin/pet_form.html
+│   ├── admin/walkin.html     # front-desk walk-in registration
 │   ├── admin/users.html
-│   ├── client/dashboard.html
-│   ├── client/book_appointment.html
-│   ├── client/my_pets.html
-│   ├── client/my_invoices.html
 │   ├── admin/queue.html
 │   ├── admin/inventory.html
 │   ├── admin/inventory_form.html
-│   ├── admin/invoices.html
-│   ├── vet/dashboard.html
-│   ├── vet/queue.html
-│   ├── vet/consultations.html
-│   ├── vet/consultation_form.html
-│   └── vet/consultation_detail.html
+│   └── admin/invoices.html
 ├── static/
-│   ├── css/style.css + landing.css + sidebar.css
-│   ├── js/main.js + sidebar.js
+│   ├── css/style.css + landing.css + sidebar.css + clinic.css
+│   ├── js/main.js + sidebar.js + clinic.js
 ├── pictures/                 # pet photo ORIGINALS (do-not-edit; web copies in static/images/)
 ├── README.md / CHANGELOG.md / AGENTS.md / SESSION.md
 └── System Requirements/      # instructor docs (untouched)

@@ -1,45 +1,144 @@
 {% extends "admin/base.html" %}
-{% block title %}Appointments - Admin - Pet Clinic{% endblock %}
+{% block title %}Appointments - Pet Clinic{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Appointments</h3>
-    <form method="GET" action="{{ url_for('admin_appointments') }}" class="d-flex gap-2">
-      <select name="status" class="form-select" onchange="this.form.submit()">
-        {% for s in statuses %}
-        <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s|capitalize }}</option>
-        {% endfor %}
-      </select>
-    </form>
-  </div>
+{% set page_title = "Appointments" %}
+{% include "admin/_page_header.html" %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, msg in messages %}
       <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
-  <div class="card shadow-sm"><div class="card-body">
+
+  <!-- KPI row: cards link-filter the ledger -->
+  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <a class="kpi-card" href="{{ url_for('admin_appointments', status='all', period=period) }}">
+      <div class="kpi-main">
+        <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg></span>
+        <div><div class="kpi-title">Total Bookings</div><div class="kpi-value">{{ akpi.total }}</div></div>
+      </div>
+      <div class="kpi-sub">{{ period }} · all records</div>
+    </a>
+    <a class="kpi-card" href="{{ url_for('admin_appointments', status='pending', period=period) }}">
+      <div class="kpi-main">
+        <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
+        <div><div class="kpi-title">Pending</div><div class="kpi-value">{{ akpi.pending }}</div></div>
+      </div>
+      <div class="kpi-sub">Awaiting approval</div>
+    </a>
+    <a class="kpi-card" href="{{ url_for('admin_appointments', status='approved', period=period) }}">
+      <div class="kpi-main">
+        <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+        <div><div class="kpi-title">Approved</div><div class="kpi-value">{{ akpi.approved }}</div></div>
+      </div>
+      <div class="kpi-sub">Confirmed visits</div>
+    </a>
+    <a class="kpi-card" href="{{ url_for('admin_appointments', status='cancelled', period=period) }}">
+      <div class="kpi-main">
+        <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></span>
+        <div><div class="kpi-title">Rejected</div><div class="kpi-value">{{ akpi.rejected }}</div></div>
+      </div>
+      <div class="kpi-sub">Declined bookings</div>
+    </a>
+  </div>
+
+  <!-- Action bar: search + refresh + combined funnel (period + status) -->
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_appointments') }}" class="search-box">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="status" value="{{ status }}">
+      <input type="text" name="q" class="form-control" placeholder="Search pet, owner, phone, reason…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List"
+       href="{{ url_for('admin_appointments', status=status, period=period, q=q) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="filter-wrap">
+      <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
+        <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+        {% if status != 'all' or period != 'All Time' %}<span class="notif-badge">•</span>{% endif %}</button>
+      <div class="filter-panel" id="barFilterPanel">
+        <form method="GET" action="{{ url_for('admin_appointments') }}">
+          <input type="hidden" name="q" value="{{ q or '' }}">
+          <div class="filter-cat"><strong>Period</strong></div>
+          {% for p in periods %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                   id="bper{{ loop.index }}" {% if p == period %}checked{% endif %}>
+            <label class="form-check-label" for="bper{{ loop.index }}">{{ p }}</label>
+          </div>
+          {% endfor %}
+          <div class="filter-cat mt-2"><strong>Status</strong></div>
+          <select name="status" class="form-select form-select-sm">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s|capitalize }}</option>
+            {% endfor %}
+          </select>
+          <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin_appointments') }}">Clear</a>
+            <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
     {% if rows %}
+    <div class="table-responsive-sm">
     <table class="table table-sm align-middle">
         <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Vet</th><th>Reason</th><th>Status</th>
-          {% if session.role == 'admin' %}<th></th>{% endif %}</tr></thead>
+          <th class="text-end">Actions</th></tr></thead>
       <tbody>{% for a in rows %}
         <tr><td>{{ a.id }}</td><td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
             <td>{{ a.pet_name }} / {{ a.owner_name }}{% if a.phone %}<br><small class="text-muted">{{ a.phone }}</small>{% endif %}</td>
             <td>{{ a.vet_name or 'TBD' }}</td><td>{{ a.reason }}</td>
-            <td><span class="badge bg-secondary">{{ a.status }}</span></td>
-            {% if session.role == 'admin' %}
-            <td><form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}?status={{ status }}" class="d-flex gap-1">
-              <select name="status" class="form-select form-select-sm">
-                {% for s in ['pending','approved','completed','cancelled'] %}
-                <option value="{{ s }}" {% if s == a.status %}selected{% endif %}>{{ s }}</option>
-                {% endfor %}
-              </select>
-              <button class="btn btn-sm btn-primary">Set</button>
-            </form></td>
-            {% endif %}</tr>
+            <td><span class="badge badge-{{ a.status }}">{{ a.status }}</span></td>
+            <td class="action-cell">
+              <button class="icon-act icon-view" title="View booking" data-bs-toggle="modal"
+                      data-bs-target="#viewAppt{{ a.id }}">
+                <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></button>
+              {% if session.role == 'admin' and a.status == 'pending' %}
+              <form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}"
+                    class="d-inline" onsubmit="return confirm('Approve booking #{{ a.id }}?')">
+                <input type="hidden" name="status" value="approved">
+                <button class="icon-act icon-approve" title="Approve">
+                  <svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}"
+                    class="d-inline" onsubmit="return confirm('Reject booking #{{ a.id }}?')">
+                <input type="hidden" name="status" value="cancelled">
+                <button class="icon-act icon-reject" title="Reject">
+                  <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
+              </form>
+              {% endif %}
+            </td></tr>
       {% endfor %}</tbody>
     </table>
+    </div>
     {% else %}<p class="text-muted mb-0">No appointments found.</p>{% endif %}
   </div></div>
-</div>
+
+  <!-- View modals -->
+  {% for a in rows %}
+  <div class="modal fade" id="viewAppt{{ a.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Booking #{{ a.id }}</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <table class="table table-sm">
+          <tr><th>Pet</th><td>{{ a.pet_name }}</td></tr>
+          <tr><th>Owner</th><td>{{ a.owner_name }}{% if a.phone %} ({{ a.phone }}){% endif %}</td></tr>
+          <tr><th>Visit</th><td>{{ a.appointment_date }} at {{ a.appointment_time }}</td></tr>
+          <tr><th>Vet</th><td>{{ a.vet_name or 'To be assigned' }}</td></tr>
+          <tr><th>Service</th><td>{{ a.reason }}</td></tr>
+          <tr><th>Status</th><td><span class="badge badge-{{ a.status }}">{{ a.status }}</span></td></tr>
+        </table>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Close</button></div>
+    </div></div>
+  </div>
+  {% endfor %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 {% endblock %}

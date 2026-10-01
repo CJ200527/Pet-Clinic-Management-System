@@ -1,78 +1,146 @@
 {% extends "admin/base.html" %}
-{% block title %}Admin Dashboard - Pet Clinic{% endblock %}
+{% block title %}Dashboard - Pet Clinic{% endblock %}
 {% block content %}
-<div class="container py-4">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-  <div class="row g-3 mb-4">
-    <div class="col-md-2"><div class="card text-center p-3"><h3>{{ stats.owners }}</h3><small>Owners</small></div></div>
-    <div class="col-md-2"><div class="card text-center p-3"><h3>{{ stats.vets }}</h3><small>Vets/Staff</small></div></div>
-    <div class="col-md-2"><div class="card text-center p-3"><h3>{{ stats.pets }}</h3><small>Pets</small></div></div>
-    <div class="col-md-2"><div class="card text-center p-3"><h3>{{ stats.pending }}</h3><small>Pending</small></div></div>
-    <div class="col-md-2"><div class="card text-center p-3"><h3>{{ stats.serving }}</h3><small>Serving now</small></div></div>
-    <div class="col-md-2"><div class="card text-center p-3"><h3>₱{{ stats.unpaid }}</h3><small>Unpaid</small></div></div>
+
+{% set page_title = "Pet Clinic Management" %}
+{% set full_header = True %}
+{% include "admin/_page_header.html" %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, msg in messages %}
+    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+  {% endfor %}
+{% endwith %}
+
+<!-- KPI row (5 cards) -->
+<div class="kpi-grid">
+  <a class="kpi-card" href="{{ url_for('admin_appointments', status='pending') }}">
+    <div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
+      <div><div class="kpi-title">Pending Bookings</div><div class="kpi-value">{{ kpi.pending }}</div></div>
+    </div>
+    <div class="kpi-sub">Awaiting approval</div>
+  </a>
+  <a class="kpi-card" href="{{ url_for('admin_queue') }}">
+    <div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#k-queue"></use></svg></span>
+      <div><div class="kpi-title">In Queue Today</div><div class="kpi-value">{{ kpi.queue }}</div></div>
+    </div>
+    <div class="kpi-sub">Waiting + serving now</div>
+  </a>
+  <a class="kpi-card" href="{{ url_for('admin_inventory') }}">
+    <div class="kpi-main">
+      <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#k-alert"></use></svg></span>
+      <div><div class="kpi-title">Low Stock Alert</div><div class="kpi-value">{{ kpi.lowstock }}</div></div>
+    </div>
+    <div class="kpi-sub">Items at or below 5 units</div>
+  </a>
+  <a class="kpi-card" href="{{ url_for('admin_invoices') }}">
+    <div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-bill"></use></svg></span>
+      <div><div class="kpi-title">Unpaid Bills</div><div class="kpi-value">₱{{ kpi.unpaid }}</div></div>
+    </div>
+    <div class="kpi-sub">Outstanding balance</div>
+  </a>
+  <a class="kpi-card" href="{{ url_for('admin_consultations') }}">
+    <div class="kpi-main">
+      <span class="kpi-badge badge-slate"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+      <div><div class="kpi-title">Consults Done</div><div class="kpi-value">{{ kpi.consults }}</div></div>
+    </div>
+    <div class="kpi-sub">{{ period }}</div>
+  </a>
+</div>
+
+<!-- Now-serving strip -->
+<div class="now-serving">
+  <div class="ns-main">
+    <span class="ns-label">Now Serving</span>
+    {% if now_serving %}
+    <span class="ns-number">#{{ now_serving.queue_number }}</span>
+    <span class="ns-name">{{ now_serving.pet_name }} / {{ now_serving.owner_name }}</span>
+    {% else %}
+    <span class="ns-number ns-idle">—</span>
+    <span class="ns-name text-muted">Nobody serving right now</span>
+    {% endif %}
   </div>
-  <div class="card shadow-sm mb-4 {% if pending_list %}border-warning{% endif %}"><div class="card-body">
-    <h5>Pending Approvals {% if pending_list %}<span class="badge bg-warning text-dark">{{ pending_list|length }}</span>{% endif %}</h5>
-    {% if pending_list %}
-    <table class="table table-sm align-middle mb-0">
-      <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Service</th>
-        {% if session.role == 'admin' %}<th class="text-end">Action</th>{% endif %}</tr></thead>
-      <tbody>{% for a in pending_list %}
-        <tr><td>{{ a.id }}</td><td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
-            <td>{{ a.pet_name }} / {{ a.owner_name }}{% if a.phone %}<br><small class="text-muted">{{ a.phone }}</small>{% endif %}</td>
-            <td>{{ a.reason }}</td>
-            {% if session.role == 'admin' %}
-            <td class="text-end"><form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}" class="d-inline-flex gap-1">
-              <button name="status" value="approved" class="btn btn-sm btn-success">Approve</button>
-              <button name="status" value="cancelled" class="btn btn-sm btn-outline-danger"
-                      onclick="return confirm('Decline booking #{{ a.id }}?')">Decline</button>
-            </form></td>
-            {% endif %}</tr>
-      {% endfor %}</tbody>
-    </table>
-    {% else %}<p class="text-muted mb-0">No pending bookings. All clear!</p>{% endif %}
-  </div></div>
-  <div class="row g-3">
-    <div class="col-md-8"><div class="card shadow-sm"><div class="card-body">
-      <h5>Recent Appointments</h5>
-      {% if recent %}
-      <table class="table table-sm align-middle">
-        <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Vet</th><th>Status</th>
-          {% if session.role == 'admin' %}<th></th>{% endif %}</tr></thead>
-        <tbody>{% for a in recent %}
-          <tr><td>{{ a.id }}</td><td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
-              <td>{{ a.pet_name }} / {{ a.owner_name }}</td><td>{{ a.vet_name or 'TBD' }}</td>
-              <td><span class="badge bg-secondary">{{ a.status }}</span></td>
-              {% if session.role == 'admin' %}
-              <td><form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}" class="d-flex gap-1">
-                <select name="status" class="form-select form-select-sm">
-                  {% for s in ['pending','approved','completed','cancelled'] %}
-                  <option value="{{ s }}" {% if s == a.status %}selected{% endif %}>{{ s }}</option>
-                  {% endfor %}
-                </select>
-                <button class="btn btn-sm btn-primary">Set</button>
-              </form></td>
-              {% endif %}</tr>
-        {% endfor %}</tbody>
-      </table>
-      {% else %}<p class="text-muted">No appointments yet.</p>{% endif %}
-    </div></div></div>
-    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body">
-      <h5>Lowest Stock</h5>
-      {% if low_stock %}
-      <ul class="list-group list-group-flush">
-        {% for i in low_stock %}
-        <li class="list-group-item d-flex justify-content-between">
-          <span>{{ i.item_name }}</span><span class="badge bg-{{ 'danger' if i.quantity <= 5 else 'secondary' }}">{{ i.quantity }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}<p class="text-muted">No inventory items.</p>{% endif %}
-    </div></div></div>
+  <div class="ns-next">
+    <span class="ns-label">Up Next</span>
+    {% if up_next %}
+      {% for u in up_next %}
+      <span class="ns-chip">#{{ u.queue_number }} {{ u.pet_name }}</span>
+      {% endfor %}
+    {% else %}
+    <span class="text-muted">Queue clear</span>
+    {% endif %}
+    <button type="button" class="tool-btn" id="dashLiveToggle" title="Pause live refresh"
+            style="background:rgba(255,255,255,.2);border-color:transparent;color:#fff;">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></button>
   </div>
 </div>
+
+<!-- Analytics -->
+<div class="analytics-grid">
+  <div class="chart-card"><h6>Bookings Trend <small class="text-muted">{{ period }}</small></h6>
+    <div class="chart-box"><canvas id="chBookings"></canvas></div></div>
+  <div class="chart-card"><h6>Queue Load <small class="text-muted">Today</small></h6>
+    <div class="chart-box"><canvas id="chQueue"></canvas></div></div>
+  <div class="chart-card"><h6>Revenue <small class="text-muted">{{ period }}</small></h6>
+    <div class="chart-box"><canvas id="chRevenue"></canvas></div></div>
+  <div class="chart-card"><h6>Top Services <small class="text-muted">{{ period }}</small></h6>
+    <div class="chart-box"><canvas id="chServices"></canvas></div></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const data = {{ (charts or {})|tojson }};
+  if (!data.labels || !window.Chart) return;
+  const teal = ['#0f766e', '#14b8a6', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6'];
+  const mk = (id, cfg) => {
+    const el = document.getElementById(id);
+    if (el) new Chart(el, cfg);
+  };
+  const fill = { responsive: true, maintainAspectRatio: false };
+  mk('chBookings', { type: 'bar',
+    data: { labels: data.labels,
+      datasets: [{ data: data.bookings, backgroundColor: '#0f766e', borderRadius: 4,
+        categoryPercentage: 0.85, barPercentage: 0.9 }] },
+    options: { ...fill, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  mk('chQueue', { type: 'doughnut',
+    data: { labels: ['Waiting', 'Serving', 'Done', 'Skipped'],
+      datasets: [{ data: data.queue_load, backgroundColor: ['#f59e0b', '#14b8a6', '#2e7d32', '#ef4444'] }] },
+    options: { ...fill, layout: { padding: 8 },
+      plugins: { legend: { position: 'bottom', align: 'center' } } } });
+  mk('chServices', { type: 'bar',
+    data: { labels: data.services,
+      datasets: [{ data: data.service_counts, backgroundColor: '#14b8a6', borderRadius: 4,
+        categoryPercentage: 0.7, barPercentage: 0.9 }] },
+    options: { ...fill, indexAxis: 'y', plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  mk('chRevenue', { type: 'line',
+    data: { labels: data.labels,
+      datasets: [{ data: data.revenue, borderColor: '#0f766e', backgroundColor: 'rgba(15,118,110,.15)',
+        fill: true, tension: .35 }] },
+    options: { ...fill, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } } } });
+})();
+</script>
+
+<!-- Approvals live in the Appointments ledger (pending KPI card links there) -->
+
+<!-- Recent activity -->
+<div class="card shadow-sm"><div class="card-body">
+  <h5>Recent Activity <small class="text-muted">({{ period }})</small></h5>
+  {% if recent %}
+  <table class="table table-sm align-middle mb-0">
+    <thead><tr><th>#</th><th>Booked</th><th>Visit Date</th><th>Pet / Owner</th><th>Vet</th><th>Status</th></tr></thead>
+    <tbody>{% for a in recent %}
+      <tr><td>{{ a.id }}</td><td><small>{{ a.created_at }}</small></td>
+          <td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
+          <td>{{ a.pet_name }} / {{ a.owner_name }}</td><td>{{ a.vet_name or 'TBD' }}</td>
+          <td><span class="badge bg-secondary">{{ a.status }}</span></td></tr>
+    {% endfor %}</tbody>
+  </table>
+  {% else %}<p class="text-muted mb-0">No activity in this period.</p>{% endif %}
+</div></div>
 {% endblock %}

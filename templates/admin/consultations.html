@@ -1,0 +1,128 @@
+{% extends "admin/base.html" %}
+{% block title %}Consultations - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "Consultations" %}
+{% include "admin/_page_header.html" %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
+      <div><div class="kpi-title">Total Logged</div><div class="kpi-value">{{ ckpi.total }}</div></div>
+    </div><div class="kpi-sub">All consultations</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
+      <div><div class="kpi-title">This {{ period }}</div><div class="kpi-value">{{ ckpi.period }}</div></div>
+    </div><div class="kpi-sub">In selected period</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+      <div><div class="kpi-title">With Prescription</div><div class="kpi-value">{{ ckpi.withrx }}</div></div>
+    </div><div class="kpi-sub">Treatments recorded</div></div>
+  </div>
+
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_consultations') }}" class="search-box">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="rx" value="{{ rx }}">
+      <input type="text" name="q" class="form-control" placeholder="Search diagnosis or pet…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List"
+       href="{{ url_for('admin_consultations', period=period, q=q, rx=rx) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="bar-spacer"></div>
+    <div class="filter-wrap">
+      <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
+        <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+        {% if rx != 'all' or period != 'All Time' %}<span class="notif-badge">•</span>{% endif %}</button>
+      <div class="filter-panel" id="barFilterPanel">
+        <form method="GET" action="{{ url_for('admin_consultations') }}">
+          <input type="hidden" name="q" value="{{ q or '' }}">
+          <div class="filter-cat"><strong>Period</strong></div>
+          {% for p in periods %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                   id="cper{{ loop.index }}" {% if p == period %}checked{% endif %}>
+            <label class="form-check-label" for="cper{{ loop.index }}">{{ p }}</label>
+          </div>
+          {% endfor %}
+          <div class="filter-cat mt-2"><strong>Prescription</strong></div>
+          <select name="rx" class="form-select form-select-sm">
+            <option value="all" {% if rx == 'all' %}selected{% endif %}>All records</option>
+            <option value="yes" {% if rx == 'yes' %}selected{% endif %}>With Rx</option>
+            <option value="no" {% if rx == 'no' %}selected{% endif %}>Without Rx</option>
+          </select>
+          <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin_consultations') }}">Clear</a>
+            <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <button class="btn-add" data-bs-toggle="modal" data-bs-target="#logConsultModal">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Log Consultation</button>
+  </div>
+
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
+    {% if rows %}
+    <div class="table-responsive-sm">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>#</th><th>Date</th><th>Pet</th><th>Logged By</th><th>Diagnosis</th>
+        <th class="text-end">Actions</th></tr></thead>
+      <tbody>{% for c in rows %}
+        <tr><td>{{ c.id }}</td><td>{{ c.consultation_date }}</td><td>{{ c.pet_name }}</td>
+            <td>{{ c.vet_name }}</td><td>{{ c.diagnosis[:80] }}</td>
+            <td class="action-cell">
+              <a class="icon-act icon-view" title="View + prescriptions"
+                 href="{{ url_for('admin_consultation_detail', consult_id=c.id) }}">
+                <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></a>
+            </td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}<p class="text-muted mb-0">No consultations logged yet.</p>{% endif %}
+  </div></div>
+
+  <!-- Log modal: create without leaving the page -->
+  <div class="modal fade" id="logConsultModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content">
+      <form method="POST" action="{{ url_for('admin_consultation_new') }}">
+        <div class="modal-header"><h5 class="modal-title">Log Consultation</h5>
+          <button class="btn-close" data-bs-dismiss="modal" type="button"></button></div>
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Appointment</label>
+            <select name="appointment_id" class="form-select" required>
+              {% if eligible %}
+                {% for a in eligible %}
+                <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date }})</option>
+                {% endfor %}
+              {% else %}
+                <option value="">No approved appointments available</option>
+              {% endif %}
+            </select></div>
+          <div class="mb-3"><label class="form-label">Diagnosis</label>
+            <textarea name="diagnosis" class="form-control" rows="2" required></textarea></div>
+          <div class="mb-3"><label class="form-label">Treatment</label>
+            <textarea name="treatment" class="form-control" rows="2"></textarea></div>
+          <div class="mb-3"><label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2"></textarea></div>
+          <div class="mb-1"><label class="form-label">Bill Amount (₱, optional)</label>
+            <input type="number" name="bill_amount" min="0" step="0.01" class="form-control"
+                   placeholder="0 = no bill">
+            <div class="form-text">Filled = auto-issues an unpaid bill for this visit.</div></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancel</button>
+          <button class="btn btn-success" type="submit">Save</button>
+        </div>
+      </form>
+    </div></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}

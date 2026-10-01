@@ -1,7 +1,9 @@
 {% extends "admin/base.html" %}
 {% block title %}Edit Item - Pet Clinic{% endblock %}
 {% block content %}
-<div class="container py-4">
+{% set page_title = "Edit Item" %}
+{% set show_filter = False %}
+{% include "admin/_page_header.html" %}
   <div class="row justify-content-center"><div class="col-md-6">
     <div class="card shadow-sm"><div class="card-body p-4">
       <h3>Edit: {{ item.item_name }}</h3>
@@ -30,5 +32,4 @@
       <a href="{{ url_for('admin_inventory') }}" class="btn btn-link mt-2">← Back</a>
     </div></div>
   </div></div>
-</div>
 {% endblock %}

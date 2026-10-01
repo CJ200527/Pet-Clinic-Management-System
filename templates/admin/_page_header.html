@@ -1,0 +1,62 @@
+{# admin/_page_header.html — shared page header card (CPSC header law).
+   Requires: page_title. Optional: full_header (dashboard only: period filter
+   + refresh live here); list pages show label + clock + bell + user, with the
+   filter + refresh living in their action bar. show_bell default True.
+   Bell data (bell, bell_total) comes from the inject_bell context processor. #}
+<div class="top-header">
+  <div>
+    <h1>{{ page_title }}</h1>
+    <div class="live-clock">Loading Date &amp; Time...</div>
+  </div>
+  <div class="header-tools">
+    {% if full_header|default(False) %}
+    <form method="GET" action="{{ request.path }}" class="d-flex align-items-center gap-2">
+      <span class="filter-label">{{ period }}</span>
+      <a class="tool-btn" title="Refresh Data" href="{{ request.full_path }}">
+        <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+      <div class="filter-wrap">
+        <button type="button" class="tool-btn" id="filterBtn" title="Period Filter">
+          <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg></button>
+        <div class="filter-panel" id="filterPanel">
+          <div class="mb-2"><strong>Period</strong></div>
+          {% for p in periods %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                   id="per{{ loop.index }}" {% if p == period %}checked{% endif %}>
+            <label class="form-check-label" for="per{{ loop.index }}">{{ p }}</label>
+          </div>
+          {% endfor %}
+          {% for key, val in request.args.items() %}
+            {% if key != 'period' %}<input type="hidden" name="{{ key }}" value="{{ val }}">{% endif %}
+          {% endfor %}
+          <button class="btn btn-sm w-100 mt-2" style="background:var(--vet);color:#fff;">Apply</button>
+        </div>
+      </div>
+    </form>
+    {% endif %}
+    {% if show_bell|default(True) %}
+    <div class="notif-wrap">
+      <button type="button" class="tool-btn notif-bell" id="bellBtn" title="Notifications">
+        <svg class="ic" aria-hidden="true"><use href="#i-bell"></use></svg>
+        {% if bell_total %}<span class="notif-badge">{{ bell_total }}</span>{% endif %}</button>
+      <div class="notif-panel" id="bellPanel">
+        {% if bell_total %}
+        <a class="notif-row" href="{{ url_for('admin_appointments', status='pending') }}">
+          <span class="notif-dot"></span><span>Pending bookings</span><strong>{{ bell.pending }}</strong></a>
+        <a class="notif-row" href="{{ url_for('admin_inventory') }}">
+          <span class="notif-dot"></span><span>Low stock items</span><strong>{{ bell.lowstock }}</strong></a>
+        <a class="notif-row" href="{{ url_for('admin_invoices') }}">
+          <span class="notif-dot"></span><span>Unpaid bills</span><strong>₱{{ bell.unpaid }}</strong></a>
+        {% else %}
+        <div class="notif-empty">All caught up. Nothing needs attention.</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="user-block">
+      <div><div class="user-name">{{ session.get('full_name', '').split(' ')[0] }}</div>
+        <span class="user-pill">{{ session.get('role', '') }}</span></div>
+      <div class="user-avatar">{{ (session.get('full_name') or '?')[:1] }}</div>
+    </div>
+  </div>
+</div>

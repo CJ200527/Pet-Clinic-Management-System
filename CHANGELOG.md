@@ -1,9 +1,78 @@
 # Changelog
 
-## [Unreleased] — landing, curtain auth, full modules, portable DB
+## [Unreleased] — analytics, queue board, unified shell
 ### Added
-- Shared Admin/Staff dashboard: same data view for both roles, with a prominent
-  Pending Approvals card (Approve/Decline inline, Admin only).
+- Live analytics on the dashboard: adaptive buckets (Today hourly / Week daily /
+  All Time monthly, zero-filled), Bookings Trend, Queue Load doughnut, Top
+  Services, Revenue from paid invoices; Now-Serving strip + next-2 below KPIs;
+  30s auto-refresh with pause toggle (own state key).
+- User approval flow: `users.status` (pending/approved/rejected; setup_db migrates
+  old DBs, existing rows stay approved); new accounts enter pending, login
+  blocks non-approved; approve/reject icon buttons; 5 KPI cards (Total, Admins,
+  Staff, Vets, Pending); Period + Status funnel; Create User modal.
+- Invoices follow page concept: Period + Status funnel, Issue Bill modal,
+  print icon per row, full-height table.
+- Auto-billing: optional amount on consultation logging auto-issues a linked
+  unpaid bill (empty = no bill); printable receipt view with PAID stamp.
+- Walk-in history page: Total/Today KPI cards, search + Period/Status funnel,
+  full-height table with queue numbers, creation moved to an in-page modal.
+- `appointments.source` column (`guest`/`walkin`; setup_db migrates old DBs,
+  both forms stamp new rows) so histories can tell origins apart.
+- Live queue board: Now-Serving strip (serving ticket + next-2 chips), 30s
+  auto-refresh with pause toggle (state in sessionStorage), Period + Status
+  funnel, full-height table; queue-serve icons stay staff-operable.
+- CPSC control pattern on every list page (appointments pilot, then queue,
+  consultations, inventory, invoices, clients, pets, users): header → KPI row
+  (period-aware, cards link-filter their ledger) → action bar (search + refresh
+  + existing filters) → badge table with 32px sprite icon buttons
+  (view/edit/approve/reject/delete) + view modals where needed.
+- Sprite gains `i-view`, `i-edit`, `i-x`; new `.action-bar`, `.badge-*`,
+  `.icon-act` styles in `clinic.css`.
+- Client records (no logins): `/admin/clients` searchable list + full profile
+  (info, pets, visits, bills; staff-editable contact), `/admin/pets` registry
+  with species filter + edit, `/admin/walk-in` front-desk form (approved visit
+  today, optional instant queue).
+### Removed
+- Owner-login surface deleted (5 `/client/*` routes, `templates/client/`);
+  owners exist only as record rows (guest/walk-in auto-created).
+- One header everywhere: shared `admin/_page_header.html` + `client/_page_header.html`
+  includes (label, live clock, refresh, user block; bell on admin side via a
+  context processor, no per-route changes). All admin pages use them.
+### Changed
+- Reverted the header/strip color swap (light header, bold strip are back);
+  charts now fill their cards (no aspect lock, thicker bars, centered doughnut);
+  Revenue and Top Services positions swapped.
+- Analytics grid tuned to 60/40.
+- Swapped header/strip treatments (abandoned same day): page headers briefly took
+  the bold teal gradient (white text, avatar, pill), Now-Serving strip takes the light card style.
+- Analytics grid first row is 70/30 (trend wide, doughnut narrow).
+  funnel holds Period + Prescription (All/With Rx/Without Rx); full-height table.
+- Log Consultation is now an in-page Bootstrap modal (Cancel/Save), no navigation;
+  layout tightened (search-box no longer stretches; funnel sits beside the button).
+- Appointments action bar refined: search + Search + refresh + funnel clustered
+  left; funnel opens one panel with Period + Status categories (standalone status
+  dropdown removed); headers on list pages slimmed to bell-only (dashboard keeps
+  the full header); tables roomier with viewport-filling card + responsive scroll.
+- Sidebar polish: USERS group fully hidden for Staff, trailing lines on group
+  labels, dividers below logo + above Logout; `?v=` cache-bust on all static links.
+- Bell + live counts on every admin-side header (Admin and Staff alike).
+- Consultations moved to `/admin/consultations` (list/new/detail, Admin + Staff
+  operate jointly, shared list with logger column); queue-serve opened to Staff.
+### Removed
+- Vet-as-user surface deleted (6 routes, `templates/vet/`): vets are record-only
+  names now; `dashboard_for('vet')` lands on the shared view-only dashboard.
+- Pending Approvals card off the dashboard (approvals live in the ledger;
+  pending KPI card links there); profile block off all sidebars (header owns it).
+- CPSC-pattern admin dashboard: sky-teal header (label + live clock + period
+  filter + refresh + bell with live badge + user block), 5 KPI cards with SVG
+  icons (pending, queue, low stock, unpaid, consults), 4 Chart.js analytics
+  frames (empty, data wired later), period-driven activity list.
+- `static/css/clinic.css` + `static/js/clinic.js` (clock, panel toggles);
+  sprite gains k-pending/k-queue/k-alert/k-bill/k-check + i-refresh/i-filter/i-bell.
+- Sidebar nav regrouped: Dashboard | Operations (Appointments, Queue) |
+  Inventory (Inventory, Invoices) | Users (Admin-only).
+- Shared Admin/Staff dashboard: same data view for both roles
+  (Admin acts, Staff view-only + operates queue/consults).
 - Dedicated `staff` role in the ENUM (`setup_db.py` + live ALTER); Staff lands on
   the shared dashboard, keeps vet Queue/Consultations pages; Users page hidden
   from Staff with a view-only banner on the shared shell.
@@ -54,6 +123,13 @@
   and `register.html` deleted. Clients book as guests; Admin creates all accounts.
 - 8 legacy PHP files + stale `C:\xampp\htdocs\petclinic` deploy copy.
 ### Fixed
+- Inventory Items KPI showed raw `dict.items` method text (key renamed to `total`).
+### Changed
+- Inventory rebuilt to page concept: KPIs → action bar (search + refresh +
+  Period/Category funnel + Add Item modal button) → full-width stock table;
+  Add Item is now an in-page modal (Cancel/Save).
+- Full-width pages: dropped the Bootstrap `.container` wrapper that squeezed all
+  list/form pages (header + tables now span exactly like the dashboard).
 - Login Enter/Tab bug: `readonly` fields skip browser validation, so Enter in
   username submitted an empty password straight to the failure popup. Now Enter
   in username jumps to password, and the form drops `readonly` on submit so

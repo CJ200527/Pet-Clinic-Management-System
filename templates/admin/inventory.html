@@ -1,59 +1,140 @@
 {% extends "admin/base.html" %}
-{% block title %}Inventory - Admin - Pet Clinic{% endblock %}
+{% block title %}Inventory - Pet Clinic{% endblock %}
 {% block content %}
-<div class="container py-4">
-  <h3>Inventory</h3>
+{% set page_title = "Inventory" %}
+{% include "admin/_page_header.html" %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, msg in messages %}
       <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
     {% endfor %}
   {% endwith %}
-  <div class="row g-3">
-    <div class="col-md-4"><div class="card shadow-sm"><div class="card-body">
-      <h5>Add Item</h5>
-      {% if session.role == 'admin' %}
-      <form method="POST" action="{{ url_for('admin_inventory') }}">
-        <div class="mb-2"><label class="form-label">Item name</label>
-          <input type="text" name="item_name" class="form-control" required></div>
-        <div class="mb-2"><label class="form-label">Category</label>
-          <select name="category" class="form-select">
-            {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-          </select></div>
-        <div class="row">
-          <div class="col-6 mb-2"><label class="form-label">Qty</label>
-            <input type="number" name="quantity" value="0" min="0" class="form-control"></div>
-          <div class="col-6 mb-2"><label class="form-label">Price</label>
-            <input type="number" name="price" value="0" min="0" step="0.01" class="form-control"></div>
-        </div>
-        <div class="mb-3"><label class="form-label">Expiry (optional)</label>
-          <input type="date" name="expiry_date" class="form-control"></div>
-        <button class="btn btn-primary w-100">Add</button>
-      </form>
-      {% else %}<p class="text-muted mb-0">New stock is added by Admin.</p>{% endif %}
-    </div></div></div>
-    <div class="col-md-8"><div class="card shadow-sm"><div class="card-body">
-      <h5>Stock ({{ items|length }})</h5>
-      {% if items %}
-      <table class="table table-sm align-middle">
-        <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th>
-          {% if session.role == 'admin' %}<th></th>{% endif %}</tr></thead>
-        <tbody>{% for i in items %}
-          <tr><td>{{ i.item_name }}</td><td>{{ i.category }}</td>
-              <td><span class="badge bg-{{ 'danger' if i.quantity <= 5 else 'secondary' }}">{{ i.quantity }}</span></td>
-              <td>₱{{ i.price }}</td><td>{{ i.expiry_date or '-' }}</td>
-              {% if session.role == 'admin' %}
-              <td class="text-end d-flex gap-1 justify-content-end">
-                <a href="{{ url_for('admin_inventory_edit', item_id=i.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
-                <form method="POST" action="{{ url_for('admin_inventory_delete', item_id=i.id) }}"
-                      onsubmit="return confirm('Delete {{ i.item_name }}?')">
-                  <button class="btn btn-sm btn-outline-danger">Del</button>
-                </form>
-              </td>
-              {% endif %}</tr>
-        {% endfor %}</tbody>
-      </table>
-      {% else %}<p class="text-muted mb-0">No items yet.</p>{% endif %}
-    </div></div></div>
+
+  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-box"></use></svg></span>
+      <div><div class="kpi-title">Items</div><div class="kpi-value">{{ ikpi.total }}</div></div>
+    </div><div class="kpi-sub">{{ period }} · in catalog</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-alert"></use></svg></span>
+      <div><div class="kpi-title">Low Stock</div><div class="kpi-value">{{ ikpi.low }}</div></div>
+    </div><div class="kpi-sub">1–5 units left</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></span>
+      <div><div class="kpi-title">Out of Stock</div><div class="kpi-value">{{ ikpi.out }}</div></div>
+    </div><div class="kpi-sub">Needs reorder</div></div>
+    <div class="kpi-card"><div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-bill"></use></svg></span>
+      <div><div class="kpi-title">Stock Value</div><div class="kpi-value">₱{{ ikpi.value }}</div></div>
+    </div><div class="kpi-sub">On-hand total</div></div>
   </div>
-</div>
+
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_inventory') }}" class="search-box">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="category" value="{{ category }}">
+      <input type="text" name="q" class="form-control" placeholder="Search item name…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List"
+       href="{{ url_for('admin_inventory', period=period, q=q, category=category) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="bar-spacer"></div>
+    <div class="filter-wrap">
+      <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
+        <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+        {% if category != 'All' or period != 'All Time' %}<span class="notif-badge">•</span>{% endif %}</button>
+      <div class="filter-panel" id="barFilterPanel">
+        <form method="GET" action="{{ url_for('admin_inventory') }}">
+          <input type="hidden" name="q" value="{{ q or '' }}">
+          <div class="filter-cat"><strong>Period</strong></div>
+          {% for p in periods %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                   id="vper{{ loop.index }}" {% if p == period %}checked{% endif %}>
+            <label class="form-check-label" for="vper{{ loop.index }}">{{ p }}</label>
+          </div>
+          {% endfor %}
+          <div class="filter-cat mt-2"><strong>Category</strong></div>
+          <select name="category" class="form-select form-select-sm">
+            <option value="All" {% if category == 'All' %}selected{% endif %}>All categories</option>
+            {% for c in categories %}
+            <option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+          <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin_inventory') }}">Clear</a>
+            <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% if session.role == 'admin' %}
+    <button class="btn-add" data-bs-toggle="modal" data-bs-target="#addItemModal">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add Item</button>
+    {% endif %}
+  </div>
+
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
+    <h5>Stock ({{ items|length }})</h5>
+    {% if items %}
+    <div class="table-responsive-sm">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th>
+        {% if session.role == 'admin' %}<th class="text-end">Actions</th>{% endif %}</tr></thead>
+      <tbody>{% for i in items %}
+        <tr><td>{{ i.item_name }}</td><td>{{ i.category }}</td>
+            <td><span class="badge bg-{{ 'danger' if i.quantity <= 5 else 'secondary' }}">{{ i.quantity }}</span></td>
+            <td>₱{{ i.price }}</td><td>{{ i.expiry_date or '-' }}</td>
+            {% if session.role == 'admin' %}
+            <td class="action-cell">
+              <a class="icon-act icon-edit" title="Edit"
+                 href="{{ url_for('admin_inventory_edit', item_id=i.id) }}">
+                <svg class="ic" aria-hidden="true"><use href="#i-edit"></use></svg></a>
+              <form method="POST" action="{{ url_for('admin_inventory_delete', item_id=i.id) }}"
+                    class="d-inline" onsubmit="return confirm('Delete {{ i.item_name }}?')">
+                <button class="icon-act icon-del" title="Delete">
+                  <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
+              </form>
+            </td>
+            {% endif %}</tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}<p class="text-muted mb-0">No items yet.</p>{% endif %}
+  </div></div>
+
+  {% if session.role == 'admin' %}
+  <!-- Add modal -->
+  <div class="modal fade" id="addItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog"><div class="modal-content">
+      <form method="POST" action="{{ url_for('admin_inventory') }}">
+        <div class="modal-header"><h5 class="modal-title">Add Item</h5>
+          <button class="btn-close" data-bs-dismiss="modal" type="button"></button></div>
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Item name</label>
+            <input type="text" name="item_name" class="form-control" required></div>
+          <div class="mb-3"><label class="form-label">Category</label>
+            <select name="category" class="form-select">
+              {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select></div>
+          <div class="row">
+            <div class="col-6 mb-3"><label class="form-label">Qty</label>
+              <input type="number" name="quantity" value="0" min="0" class="form-control"></div>
+            <div class="col-6 mb-3"><label class="form-label">Price</label>
+              <input type="number" name="price" value="0" min="0" step="0.01" class="form-control"></div>
+          </div>
+          <div class="mb-1"><label class="form-label">Expiry (optional)</label>
+            <input type="date" name="expiry_date" class="form-control"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancel</button>
+          <button class="btn btn-success" type="submit">Save</button>
+        </div>
+      </form>
+    </div></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  {% endif %}
 {% endblock %}

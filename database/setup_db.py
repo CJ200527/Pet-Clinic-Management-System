@@ -34,6 +34,7 @@ SCHEMA = [
       email VARCHAR(100) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
       role ENUM('admin', 'vet', 'staff', 'owner') NOT NULL DEFAULT 'owner',
+      status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'approved',
       phone VARCHAR(20) NULL,
       address TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -70,6 +71,7 @@ SCHEMA = [
       appointment_date DATE NOT NULL,
       appointment_time TIME NOT NULL,
       reason TEXT NULL,
+      source ENUM('guest', 'walkin') NOT NULL DEFAULT 'guest',
       status ENUM('pending', 'approved', 'completed', 'cancelled')
         NOT NULL DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -163,6 +165,24 @@ def run_setup(db_name=DB_NAME):
         with conn.cursor() as cur:
             for stmt in SCHEMA:
                 cur.execute(stmt)
+            # Lightweight upgrade for DBs created before the source column existed.
+            cur.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS"
+                        " WHERE TABLE_SCHEMA=%s AND TABLE_NAME='appointments'"
+                        " AND COLUMN_NAME='source'", (db_name,))
+            if cur.fetchone()[0] == 0:
+                cur.execute("ALTER TABLE appointments ADD COLUMN source"
+                            " ENUM('guest','walkin') NOT NULL DEFAULT 'guest'"
+                            " AFTER reason")
+                print("Migrated: appointments.source column added.")
+            # Accounts predate the approval flow: everyone active stays approved.
+            cur.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS"
+                        " WHERE TABLE_SCHEMA=%s AND TABLE_NAME='users'"
+                        " AND COLUMN_NAME='status'", (db_name,))
+            if cur.fetchone()[0] == 0:
+                cur.execute("ALTER TABLE users ADD COLUMN status"
+                            " ENUM('pending','approved','rejected') NOT NULL"
+                            " DEFAULT 'approved' AFTER role")
+                print("Migrated: users.status column added (all existing approved).")
             cur.execute("SELECT COUNT(*) FROM users")
             seeded = 0
             if cur.fetchone()[0] == 0:
