@@ -71,7 +71,7 @@
       </div>
     </div>
     {% if session.role == 'admin' %}
-    <button class="btn-add" data-bs-toggle="modal" data-bs-target="#addItemModal">
+    <button class="btn-add" onclick="openVetModal('addItemModal');return false;">
       <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add Item</button>
     {% endif %}
   </div>
@@ -93,7 +93,10 @@
                  href="{{ url_for('admin_inventory_edit', item_id=i.id) }}">
                 <svg class="ic" aria-hidden="true"><use href="#i-edit"></use></svg></a>
               <form method="POST" action="{{ url_for('admin_inventory_delete', item_id=i.id) }}"
-                    class="d-inline" onsubmit="return confirm('Delete {{ i.item_name }}?')">
+                    class="d-inline needs-confirm"
+                      data-confirm-title="Delete item"
+                      data-confirm-msg="Delete {{ i.item_name }} from stock?">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <button class="icon-act icon-del" title="Delete">
                   <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
               </form>
@@ -106,35 +109,42 @@
   </div></div>
 
   {% if session.role == 'admin' %}
-  <!-- Add modal -->
-  <div class="modal fade" id="addItemModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog"><div class="modal-content">
+  <!-- Add modal (CPSC shell) -->
+  <div class="vet-overlay" id="addItemModal" aria-hidden="true">
+    <div class="vet-modal-box">
       <form method="POST" action="{{ url_for('admin_inventory') }}">
-        <div class="modal-header"><h5 class="modal-title">Add Item</h5>
-          <button class="btn-close" data-bs-dismiss="modal" type="button"></button></div>
-        <div class="modal-body">
-          <div class="mb-3"><label class="form-label">Item name</label>
-            <input type="text" name="item_name" class="form-control" required></div>
-          <div class="mb-3"><label class="form-label">Category</label>
-            <select name="category" class="form-select">
-              {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-            </select></div>
-          <div class="row">
-            <div class="col-6 mb-3"><label class="form-label">Qty</label>
-              <input type="number" name="quantity" value="0" min="0" class="form-control"></div>
-            <div class="col-6 mb-3"><label class="form-label">Price</label>
-              <input type="number" name="price" value="0" min="0" step="0.01" class="form-control"></div>
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="vet-modal-header"><h3>Add Item</h3>
+          <p>New stock enters the catalog immediately.</p></div>
+        <div class="vet-modal-body">
+          <div class="form-section-card"><h4>Item</h4>
+            <div class="fx21-field">
+              <input type="text" name="item_name" class="effect-21" required>
+              <span class="focus-border"><i></i></span><label>Item name</label></div>
+            <div class="fx21-field">
+              <select name="category" class="effect-21">
+                {% for c in categories %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+              </select>
+              <span class="focus-border"><i></i></span><label>Category</label></div>
           </div>
-          <div class="mb-1"><label class="form-label">Expiry (optional)</label>
-            <input type="date" name="expiry_date" class="form-control"></div>
+          <div class="form-section-card"><h4>Stock</h4>
+            <div class="fx21-field">
+              <input type="number" name="quantity" value="0" min="0" class="effect-21 has-content">
+              <span class="focus-border"><i></i></span><label>Qty</label></div>
+            <div class="fx21-field">
+              <input type="number" name="price" value="0" min="0" step="0.01" class="effect-21 has-content">
+              <span class="focus-border"><i></i></span><label>Price</label></div>
+            <div class="fx21-field">
+              <input type="date" name="expiry_date" class="effect-21">
+              <span class="focus-border"><i></i></span><label>Expiry (optional)</label></div>
+          </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal" type="button">Cancel</button>
-          <button class="btn btn-success" type="submit">Save</button>
+        <div class="vet-modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeVetModal('addItemModal')">Cancel</button>
+          <button type="submit" class="btn-modal-save">Save</button>
         </div>
       </form>
-    </div></div>
+    </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   {% endif %}
 {% endblock %}

@@ -13,6 +13,7 @@
     <div class="card shadow-sm"><div class="card-body p-4">
       <h5>{{ pet.name }} <small class="text-muted">· owner: {{ pet.owner_name }}</small></h5>
       <form method="POST" action="{{ url_for('admin_pet_edit', pet_id=pet.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="mb-2"><label class="form-label">Name</label>
           <input type="text" name="name" value="{{ pet.name }}" class="form-control" required></div>
         <div class="row">

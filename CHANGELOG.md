@@ -1,7 +1,66 @@
 # Changelog
 
-## [Unreleased] — analytics, queue board, unified shell
+## [Unreleased] — security hardening + data integrity (2026-10-30)
+### Fixed
+- `/admin/vets` raised `NameError: VET_STATUSES` (HTTP 500) whenever MySQL was
+  reachable; the constant is defined again and drives the status dropdown.
+- Removed the half-wired walk-in surface (`/admin/walk-in` redirect and the
+  orphaned template) and corrected every doc that still advertised it.
+- Guest booking can no longer rename an existing client by phone, and reuses
+  the client's existing pet instead of inserting a duplicate row.
+- Manual invoices reject appointment/consultation references that belong to a
+  different client.
+- Referenced inventory items can no longer be deleted (preserves prescription
+  history). Pet age/weight `0` values are preserved instead of becoming NULL.
+- DB-down render paths now receive complete template contexts.
 ### Added
+- CSRF protection on every non-GET request: token in session, hidden `_csrf`
+  input in all 27 POST forms, HTTP 400 on missing/mismatch. Logout is a POST.
+- Login throttle (5 failures / 5 minutes per address + username) with a
+  generic failure message; new accounts require 8+ character passwords
+  (seeded demo accounts remain `123`).
+- Transactions around guest booking, consultation + auto-bill, prescription +
+  stock deduction, and queue numbering; queue now has a per-day unique ticket
+  index with an idempotent upgrade in `setup_db.py`.
+- Environment-driven config (`PETCLINIC_DB_*`, `PETCLINIC_SECRET_KEY`,
+  `PETCLINIC_COOKIE_SECURE`), HttpOnly/SameSite=Lax cookies, 12-hour sessions,
+  opt-in debug mode, default port 5001.
+### Verified
+- 33/33 checks on a disposable `petclinic_test` database: all GET routes
+  (vets 200, walk-in 404), CSRF 400, booking dedupe/no-rename, approve → queue →
+  consult → rx → paid → receipt, staff restrictions, invoice-ref rejection,
+  throttle logic, queue unique index. Test DB dropped; demo data untouched.
+
+## [Unreleased] — motion, modals, analytics, queue board, unified shell
+### Added
+- `/` always renders the public landing page (no auto-redirect into the admin
+  dashboard when a session cookie exists). Signed-in staff now get a
+  **Dashboard** nav shortcut instead of the Login button.
+- Cascade unveil rebuilt as CSS-only (`main.content.cascade > *`,
+  `nth-child` delays): the animation starts at first paint, so content no
+  longer flashes fully rendered and then disappears into the entrance. Header
+  lands first, blocks cascade downward, 0.4s per block / 0.045s step (~0.85s
+  worst case vs the old 0.9s-per-block JS stagger). View Transitions opt-in and
+  the JS class-adding stagger were removed (they competed with the cascade);
+  `clinic.css`/`clinic.js` bumped to `?v=20261030`.
+- Fixed sidebar shell: nav rail is `position: fixed` to the viewport (`top:0;
+  bottom:0`) so scrolling the page no longer moves the sidebar; only content
+  scrolls. Logout pinned via a `flex:none` footer, nav links scroll internally
+  (`overflow-y:auto`) when the list exceeds screen height, and link/label
+  spacing tightened so the full menu + Logout fit at 100% zoom. `.main` takes a
+  `264px` offset (reset to 0 in the mobile drawer breakpoint); `sidebar.css`
+  cache-bust bumped to `?v=20261029`.
+- CPSC popup system (`vet-modals.css` + `vet-modals.js`): droplet entrance,
+  fx21 floating fields, section cards, Cancel/Save footer, locked backdrop,
+  one reusable decision shell replacing every native `confirm()`.
+- All popups converted (walk-in, log consult, issue bill, create user, add
+  item, booking view, auth error); Bootstrap JS dropped from converted pages.
+- CPSC motion system: cascade-unveil staggered entrances on every admin page
+  (header → content blocks, 0.22s steps, 0.9s settle) + View Transitions morph
+  (frozen sidebar, gliding workspace) gated to sidebar clicks; skeleton owns
+  fresh-login arrivals; reduced-motion respected throughout.
+- Skeleton shimmer overlay (CPSC pattern) on fresh login: layout-mimicking gray
+  blocks, `?welcome=1` trigger, ~1.2s play then fade; sidebar clicks bypass it.
 - Live analytics on the dashboard: adaptive buckets (Today hourly / Week daily /
   All Time monthly, zero-filled), Bookings Trend, Queue Load doughnut, Top
   Services, Revenue from paid invoices; Now-Serving strip + next-2 below KPIs;
@@ -32,16 +91,42 @@
   (info, pets, visits, bills; staff-editable contact), `/admin/pets` registry
   with species filter + edit, `/admin/walk-in` front-desk form (approved visit
   today, optional instant queue).
+- Offline vendor bundle (`static/vendor/`: Bootstrap 5.3.3 CSS + bundle JS,
+  Chart.js 4.4.1) replacing every jsdelivr CDN tag (landing, admin shell,
+  receipt, dashboard) — styling, charts, and mobile nav work with no internet.
+  Dashboard chart init already guards `!window.Chart`, so a missing chart lib
+  degrades to empty frames instead of breaking page JS.
+- `database/demo_seed.py` (rerunnable): wipes owner/transactional test rows,
+  keeps Admin/Staff, injects the checking ledger — Maria Santos + Juan Dela
+  Cruz owners; Bantay (pending guest, tomorrow), Mingming (approved walk-in,
+  queued #1 today), Tweety (completed + consult + paid P850 invoice); 4 stock
+  items (Syringe 5ml at low-stock bell threshold).
+- `clients` table (full_name, phone UNIQUE dedupe key, address) — everyone who
+  booked or walked in; `users` is logins-only again (`admin`/`staff`).
+- `vets` directory (full_name, specialty, phone, is_active) + `/admin/vets`
+  list page (KPIs, search, Period/Status funnel, Add Vet modal,
+  activate/deactivate toggles, sidebar nav; Admin-only mutate, Staff read).
+- Attending-vet dropdown (active vets only) on Log Consultation (modal + form
+  page); saving backfills `appointments.vet_id` + `clinic_queue.vet_id`, so the
+  Vet column fills in across ledger, queue, and client history.
+- `database/migrate_clients_vets.py`: one-shot live-DB migration (owners →
+  clients with id remap, `owner_id` → `client_id`, vet FKs → `vets`, legacy
+  consult vet_ids → Duty Veterinarian, `users.role` → `('admin','staff')`).
 ### Removed
 - Owner-login surface deleted (5 `/client/*` routes, `templates/client/`);
   owners exist only as record rows (guest/walk-in auto-created).
+- `vet` + `owner` roles removed from `users` (logins are admin/staff only);
+  owner rows migrated to `clients`, vet names live in the `vets` directory.
 - One header everywhere: shared `admin/_page_header.html` + `client/_page_header.html`
   includes (label, live clock, refresh, user block; bell on admin side via a
   context processor, no per-route changes). All admin pages use them.
 ### Changed
-- Reverted the header/strip color swap (light header, bold strip are back);
-  charts now fill their cards (no aspect lock, thicker bars, centered doughnut);
-  Revenue and Top Services positions swapped.
+- Re-applied the header/strip color swap per user call (bold teal headers with
+  white text; light Now-Serving strip).
+- Queue doughnut shows a gray placeholder ring + "No queue today" label when the
+  day has no queue rows (previously rendered blank).
+- Dashboard charts fill their cards (no aspect lock, thicker bars, centered
+  doughnut); Revenue and Top Services positions swapped; grid tuned to 60/40.
 - Analytics grid tuned to 60/40.
 - Swapped header/strip treatments (abandoned same day): page headers briefly took
   the bold teal gradient (white text, avatar, pill), Now-Serving strip takes the light card style.

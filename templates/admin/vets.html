@@ -1,0 +1,155 @@
+{% extends "admin/base.html" %}
+{% block title %}Vets - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "Vets" %}
+{% include "admin/_page_header.html" %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, msg in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <a class="kpi-card" href="{{ url_for('admin_vets', period=period, q=q, vstatus='all') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
+      <div><div class="kpi-title">Total Vets</div><div class="kpi-value">{{ vkpi.total }}</div></div>
+    </div><div class="kpi-sub">{{ period }} · directory</div></a>
+    <a class="kpi-card" href="{{ url_for('admin_vets', period=period, q=q, vstatus='active') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+      <div><div class="kpi-title">Active Vets</div><div class="kpi-value">{{ vkpi.active }}</div></div>
+    </div><div class="kpi-sub">Accommodating clients</div></a>
+    <a class="kpi-card" href="{{ url_for('admin_consultations', period=period) }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-slate"><svg class="ic" aria-hidden="true"><use href="#i-receipt"></use></svg></span>
+      <div><div class="kpi-title">Consults</div><div class="kpi-value">{{ vkpi.consults }}</div></div>
+    </div><div class="kpi-sub">{{ period }} · all vets</div></a>
+    <a class="kpi-card" href="{{ url_for('admin_queue') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-queue"></use></svg></span>
+      <div><div class="kpi-title">Assigned Today</div><div class="kpi-value">{{ vkpi.today }}</div></div>
+    </div><div class="kpi-sub">Vets on visits</div></a>
+  </div>
+
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_vets') }}" class="search-box">
+      <input type="hidden" name="period" value="{{ period }}">
+      <input type="hidden" name="vstatus" value="{{ vstatus }}">
+      <input type="text" name="q" class="form-control" placeholder="Search name or specialty…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List"
+       href="{{ url_for('admin_vets', period=period, q=q, vstatus=vstatus) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="bar-spacer"></div>
+    <div class="filter-wrap">
+      <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
+        <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+        {% if vstatus != 'all' or period != 'All Time' %}<span class="notif-badge">•</span>{% endif %}</button>
+      <div class="filter-panel" id="barFilterPanel">
+        <form method="GET" action="{{ url_for('admin_vets') }}">
+          <input type="hidden" name="q" value="{{ q or '' }}">
+          <div class="filter-cat"><strong>Period</strong></div>
+          {% for p in periods %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                   id="vper{{ loop.index }}" {% if p == period %}checked{% endif %}>
+            <label class="form-check-label" for="vper{{ loop.index }}">{{ p }}</label>
+          </div>
+          {% endfor %}
+          <div class="filter-cat mt-2"><strong>Status</strong></div>
+          <select name="vstatus" class="form-select form-select-sm">
+            {% for s in ['all'] + statuses %}
+            <option value="{{ s }}" {% if s == vstatus %}selected{% endif %}>{{ s|capitalize }}</option>
+            {% endfor %}
+          </select>
+          <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin_vets') }}">Clear</a>
+            <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    {% if session.role == 'admin' %}
+    <button class="btn-add" onclick="openVetModal('addVetModal');return false;">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add Vet</button>
+    {% endif %}
+  </div>
+
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
+    <h5>Veterinarians ({{ rows|length }})</h5>
+    {% if rows %}
+    <div class="table-responsive-sm">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Name</th><th>Specialty</th><th>Phone</th><th>Status</th><th>Consults</th>
+        <th class="text-end">Actions</th></tr></thead>
+      <tbody>{% for v in rows %}
+        <tr><td><strong>Dr. {{ v.full_name }}</strong></td>
+            <td>{{ v.specialty or '—' }}</td><td>{{ v.phone or '—' }}</td>
+            <td>{% if v.is_active %}<span class="badge bg-success">active</span>
+                {% else %}<span class="badge bg-secondary">inactive</span>{% endif %}</td>
+            <td><span class="badge bg-info text-dark">{{ v.consults }}</span></td>
+            <td class="action-cell">
+              {% if session.role == 'admin' %}
+              {% if v.is_active %}
+              <form method="POST" action="{{ url_for('admin_vet_status', vet_id=v.id) }}"
+                    class="d-inline needs-confirm"
+                    data-confirm-title="Deactivate vet"
+                    data-confirm-msg="Deactivate Dr. {{ v.full_name }}? They leave the assignable list.">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="inactive">
+                <button class="icon-act icon-reject" title="Deactivate">
+                  <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
+              </form>
+              {% else %}
+              <form method="POST" action="{{ url_for('admin_vet_status', vet_id=v.id) }}"
+                    class="d-inline needs-confirm"
+                    data-confirm-title="Activate vet"
+                    data-confirm-msg="Activate Dr. {{ v.full_name }}?">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+                <input type="hidden" name="status" value="active">
+                <button class="icon-act icon-approve" title="Activate">
+                  <svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}<p class="text-muted mb-0">No vets in the directory yet.</p>{% endif %}
+  </div></div>
+
+  {% if session.role == 'admin' %}
+  <!-- Add modal (CPSC shell) -->
+  <div class="vet-overlay" id="addVetModal" aria-hidden="true">
+    <div class="vet-modal-box">
+      <form method="POST" action="{{ url_for('admin_vets') }}" autocomplete="off">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="vet-modal-header"><h3>Add Vet</h3>
+          <p>New vets enter <strong>active</strong> and assignable at once.</p></div>
+        <div class="vet-modal-body">
+          <div class="form-section-card"><h4>Identity</h4>
+            <div class="fx21-field">
+              <input type="text" name="full_name" class="effect-21" required>
+              <span class="focus-border"><i></i></span><label>Full Name</label></div>
+            <div class="fx21-field">
+              <input type="text" name="specialty" class="effect-21" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>Specialty (optional)</label></div>
+            <div class="fx21-field">
+              <input type="text" name="phone" class="effect-21" placeholder=" " autocomplete="off">
+              <span class="focus-border"><i></i></span><label>Phone (optional)</label></div>
+          </div>
+        </div>
+        <div class="vet-modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeVetModal('addVetModal')">Cancel</button>
+          <button type="submit" class="btn-modal-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}

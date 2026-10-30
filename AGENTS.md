@@ -9,22 +9,25 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
 ## Project Map
 - `app.py` — all routes (single file — blueprint split proposed, pending):
   auth (`POST /login`; `GET /login` bounces to curtain; NO public register),
-  public `/` landing + `POST /book-guest` (guest booking, auto owner/pet),
-  records (`/clients`, `/clients/<id>` (staff-editable contact),
-  `/pets`, `/pets/<id>/edit` (staff-editable), `/walk-in` (approved visit + queue)),
-  admin (`/dashboard`, `/appointments`, `/consultations`, `/consultations/new`,
-  `/consultations/<id>`, `/users` (admin-only), `/users/<id>/delete`,
+  public `/` landing + `POST /book-guest` (guest booking, auto client/pet),
+  records (`/clients`, `/clients/<id>` (staff-editable contact+address),
+  `/pets`, `/pets/<id>/edit` (staff-editable)),
+  vets (`/vets` (read: admin+staff; add/toggle: admin)),
+  admin (`/dashboard`, `/appointments`, `/consultations`, `/consultations/new`
+  (attending-vet dropdown, backfills visit vet), `/consultations/<id>`,
+  `/users` (admin-only), `/users/<id>/delete`,
   `/appointments/<id>/status` (admin-only), `/queue` (read: admin+staff; add: admin),
   `/queue/<id>/status` (admin+staff), `/inventory` (read: admin+staff; add: admin),
   `/inventory/<id>/edit|delete` (admin-only), `/invoices` (read: admin+staff;
   issue: admin), `/invoices/<id>/status` (admin-only)).
-  Roles: `admin` (full), `staff` (operate + view, no approve/delete/users),
-  `vet` (record-only name), `owner` (record rows only, no login surface).
+  Roles: `admin` (full), `staff` (operate + view, no approve/delete/users).
+  Logins live in `users`; `clients` + `vets` are record tables (no login surface).
 - `config.py` — `get_connection()` (DictCursor, autocommit). Same XAMPP creds
   (`localhost / petclinic / root / ""`).
-- `database/setup_db.py` — source of truth for schema (8 tables) + Admin/Staff
-  seeds (bcrypt at runtime). Guarded by `if __name__ == "__main__"`.
-  Don't change schema without updating it + CHANGELOG.
+- `database/setup_db.py` — source of truth for schema (10 tables) + Admin/Staff/
+  Duty-Vet seeds (bcrypt at runtime). Guarded by `if __name__ == "__main__"`.
+  `database/migrate_clients_vets.py` — one-shot live upgrade (owners→clients,
+  vet FKs, role ENUM). Don't change schema without updating it + CHANGELOG.
 - `templates/landing.html` + `static/css/landing.css` — EAVS Telly pattern, vet palette;
   login lives ONLY in the `#loginCurtain` card (no standalone login page).
 - `templates/` + `static/` — Jinja2 + Bootstrap 5 CDN (until CPSC admin port drops it).
@@ -32,8 +35,10 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
 ## Coding Rules
 1. Parameterized queries only (`%s` placeholders). Never format user input into SQL.
 2. Passwords: `bcrypt.hashpw(pw, gensalt())` on register/seed,
-   fail-closed `bcrypt.checkpw()` on login. Never pass hashes through PowerShell
-   double-quoted strings (`$` gets expanded — use parameterized Python instead).
+   fail-closed `bcrypt.checkpw()` on login. New accounts need 8+ characters;
+   seeded demo accounts stay `123` (demo-only). Never pass hashes through
+   PowerShell double-quoted strings (`$` gets expanded — use parameterized
+   Python instead).
 3. Every dashboard/booking route needs `login_required` / `role_required`.
    Guards bounce to the landing curtain (`/?auth=open`), never a login page.
 4. Re-validate ownership server-side (e.g. pet belongs to `session user_id`).
@@ -60,6 +65,19 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
     roomy badge table (`.table-card-fill` min-height) with sprite icon buttons
     (`icon-view/edit/approve/reject/del`; Admin-only actions hidden for Staff).
     Row mutations stay server-guarded regardless of hidden buttons.
+11. Modal law (CPSC pattern): hand-rolled `vet-overlay` shells only (droplet
+    entrance, `fx21` floating fields, section cards, Cancel + Save footer,
+    locked backdrop, body-level overlay). Never use native `confirm()` — route
+    through the shared decision shell. Never add X buttons.
+12. CSRF law: every `method="POST"` form starts with
+    `<input type="hidden" name="_csrf" value="{{ csrf_token() }}">`. New POST
+    routes are covered automatically by the `before_request` guard; never
+    exempt one without a documented reason.
+13. Config law: DB credentials, `SECRET_KEY`, cookie `Secure`, `PORT`, and
+    debug come from environment variables (`PETCLINIC_*`, `PORT`,
+    `FLASK_DEBUG`). Keep dev fallbacks in `config.py` only; never hardcode
+    secrets in routes. Multi-write flows (booking, consultation, stock,
+    queue) must use the `tx()` helper.
 
 ## Session Protocol
 1. Read `SESSION.md` (last-done / current-state / next-steps / blockers).

@@ -5,7 +5,8 @@
 {% set show_filter = False %}
 {% include "admin/_page_header.html" %}
   <h3>Consultation #{{ consult.id }} — {{ consult.pet_name }}</h3>
-  <p class="text-muted">{{ consult.consultation_date }}</p>
+  <p class="text-muted">{{ consult.consultation_date }} · Attending vet:
+    <strong>Dr. {{ consult.vet_name }}</strong></p>
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, msg in messages %}
       <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
@@ -33,6 +34,7 @@
       {% if can_edit %}
       <hr><h6>Add Prescription</h6>
       <form method="POST" action="{{ url_for('admin_consultation_detail', consult_id=consult.id) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="mb-2"><label class="form-label">Inventory item (optional)</label>
           <select name="inventory_id" class="form-select">
             <option value="">-- none (general treatment) --</option>

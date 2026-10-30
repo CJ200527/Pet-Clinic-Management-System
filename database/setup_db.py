@@ -33,15 +33,30 @@ SCHEMA = [
       username VARCHAR(50) NOT NULL UNIQUE,
       email VARCHAR(100) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
-      role ENUM('admin', 'vet', 'staff', 'owner') NOT NULL DEFAULT 'owner',
+      role ENUM('admin', 'staff') NOT NULL DEFAULT 'staff',
       status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'approved',
       phone VARCHAR(20) NULL,
       address TEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+    """CREATE TABLE IF NOT EXISTS clients (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      full_name VARCHAR(50) NOT NULL,
+      phone VARCHAR(20) NOT NULL UNIQUE,
+      address TEXT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+    """CREATE TABLE IF NOT EXISTS vets (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      full_name VARCHAR(100) NOT NULL,
+      specialty VARCHAR(100) NULL,
+      phone VARCHAR(20) NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS pets (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      owner_id INT NOT NULL,
+      client_id INT NOT NULL,
       name VARCHAR(50) NOT NULL,
       species ENUM('Dog', 'Cat', 'Bird', 'Rabbit', 'Hamster', 'Reptile', 'Other') NOT NULL,
       breed VARCHAR(50) NULL,
@@ -49,8 +64,8 @@ SCHEMA = [
       gender ENUM('Male', 'Female') NULL,
       weight DECIMAL(5,2) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT fk_pets_owner FOREIGN KEY (owner_id)
-        REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+      CONSTRAINT fk_pets_client FOREIGN KEY (client_id)
+        REFERENCES clients (id) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS inventory (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -66,7 +81,7 @@ SCHEMA = [
     """CREATE TABLE IF NOT EXISTS appointments (
       id INT AUTO_INCREMENT PRIMARY KEY,
       pet_id INT NOT NULL,
-      owner_id INT NOT NULL,
+      client_id INT NOT NULL,
       vet_id INT NULL,
       appointment_date DATE NOT NULL,
       appointment_time TIME NOT NULL,
@@ -77,29 +92,30 @@ SCHEMA = [
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_appt_pet FOREIGN KEY (pet_id)
         REFERENCES pets (id) ON DELETE CASCADE ON UPDATE CASCADE,
-      CONSTRAINT fk_appt_owner FOREIGN KEY (owner_id)
-        REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_appt_client FOREIGN KEY (client_id)
+        REFERENCES clients (id) ON DELETE CASCADE ON UPDATE CASCADE,
       CONSTRAINT fk_appt_vet FOREIGN KEY (vet_id)
-        REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
+        REFERENCES vets (id) ON DELETE SET NULL ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS clinic_queue (
       id INT AUTO_INCREMENT PRIMARY KEY,
       appointment_id INT NOT NULL UNIQUE,
       pet_id INT NOT NULL,
-      owner_id INT NOT NULL,
+      client_id INT NOT NULL,
       vet_id INT NULL,
       queue_number INT NOT NULL,
       queue_date DATE NOT NULL,
       status ENUM('waiting', 'serving', 'done', 'skipped') NOT NULL DEFAULT 'waiting',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_queue_day_number (queue_date, queue_number),
       CONSTRAINT fk_queue_appointment FOREIGN KEY (appointment_id)
         REFERENCES appointments (id) ON DELETE CASCADE ON UPDATE CASCADE,
       CONSTRAINT fk_queue_pet FOREIGN KEY (pet_id)
         REFERENCES pets (id) ON DELETE CASCADE ON UPDATE CASCADE,
-      CONSTRAINT fk_queue_owner FOREIGN KEY (owner_id)
-        REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_queue_client FOREIGN KEY (client_id)
+        REFERENCES clients (id) ON DELETE CASCADE ON UPDATE CASCADE,
       CONSTRAINT fk_queue_vet FOREIGN KEY (vet_id)
-        REFERENCES users (id) ON DELETE SET NULL ON UPDATE CASCADE
+        REFERENCES vets (id) ON DELETE SET NULL ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS consultations (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -115,7 +131,7 @@ SCHEMA = [
       CONSTRAINT fk_consult_pet FOREIGN KEY (pet_id)
         REFERENCES pets (id) ON DELETE CASCADE ON UPDATE CASCADE,
       CONSTRAINT fk_consult_vet FOREIGN KEY (vet_id)
-        REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+        REFERENCES vets (id) ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS prescriptions_treatments (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -131,14 +147,14 @@ SCHEMA = [
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS invoices (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      owner_id INT NOT NULL,
+      client_id INT NOT NULL,
       appointment_id INT NULL,
       consultation_id INT NULL,
       amount DECIMAL(10,2) NOT NULL,
       status ENUM('unpaid', 'paid', 'cancelled') NOT NULL DEFAULT 'unpaid',
       issued_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT fk_inv_owner FOREIGN KEY (owner_id)
-        REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE,
+      CONSTRAINT fk_inv_client FOREIGN KEY (client_id)
+        REFERENCES clients (id) ON DELETE CASCADE ON UPDATE CASCADE,
       CONSTRAINT fk_inv_appointment FOREIGN KEY (appointment_id)
         REFERENCES appointments (id) ON DELETE SET NULL ON UPDATE CASCADE,
       CONSTRAINT fk_inv_consult FOREIGN KEY (consultation_id)
@@ -183,6 +199,14 @@ def run_setup(db_name=DB_NAME):
                             " ENUM('pending','approved','rejected') NOT NULL"
                             " DEFAULT 'approved' AFTER role")
                 print("Migrated: users.status column added (all existing approved).")
+            # Queue tickets must be unique per day (guards concurrent adds).
+            cur.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS"
+                        " WHERE TABLE_SCHEMA=%s AND TABLE_NAME='clinic_queue'"
+                        " AND INDEX_NAME='uq_queue_day_number'", (db_name,))
+            if cur.fetchone()[0] == 0:
+                cur.execute("ALTER TABLE clinic_queue ADD UNIQUE KEY"
+                            " uq_queue_day_number (queue_date, queue_number)")
+                print("Migrated: unique queue number per day.")
             cur.execute("SELECT COUNT(*) FROM users")
             seeded = 0
             if cur.fetchone()[0] == 0:
@@ -193,6 +217,12 @@ def run_setup(db_name=DB_NAME):
                         " VALUES (%s,%s,%s,%s,%s,%s)",
                         (full_name, username, email, hashed, role, phone))
                     seeded += 1
+            cur.execute("SELECT COUNT(*) FROM vets")
+            if cur.fetchone()[0] == 0:
+                cur.execute(
+                    "INSERT INTO vets (full_name, specialty) VALUES"
+                    " ('Duty Veterinarian', 'General')")
+                seeded += 1
             cur.execute("SHOW TABLES")
             tables = [r[0] for r in cur.fetchall()]
     finally:
@@ -208,7 +238,8 @@ def main():
         print(f"Setup failed: {e}\nIs XAMPP MySQL running?")
         raise SystemExit(1)
     print(f"Database `{db_name}` ready: {len(tables)} tables ({', '.join(sorted(tables))}).")
-    print(f"Seeded {seeded} account(s): Admin / Staff (password 123).")
+    print(f"Seeded {seeded} account(s): Admin / Staff (password 123)"
+          f" + Duty Veterinarian.")
 
 
 if __name__ == "__main__":

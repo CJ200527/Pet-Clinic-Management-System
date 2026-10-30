@@ -1,0 +1,62 @@
+/* vet-modals.css — CPSC-pattern popup system (vet-teal adaptation).
+   Laws: overlays live at body level (never nested — transforms trap them);
+   no X buttons; locked backdrop (no Esc/backdrop close); Cancel + Save footer;
+   fx21 floating-label fields; dropletBounce entrance; reduced-motion respected. */
+.vet-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(26,42,58,.55);
+  display: none; align-items: center; justify-content: center; padding: 1rem; }
+.vet-overlay.open { display: flex; }
+body.modal-lock { overflow: hidden; }
+.vet-modal-box { background: #fff; border-radius: 1rem; width: 520px;
+  max-width: calc(100vw - 2rem); max-height: 88vh; display: flex;
+  flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  animation: dropletBounce .45s cubic-bezier(.25,1,.5,1); }
+.vet-modal-box.wide { width: 90vw; max-width: 860px; }
+@keyframes dropletBounce {
+  0% { opacity: 0; transform: scale(.92) translateY(14px); }
+  60% { opacity: 1; transform: scale(1.01) translateY(-2px); }
+  100% { opacity: 1; transform: none; } }
+.vet-modal-header { padding: 1.1rem 1.4rem .6rem; flex: none; }
+.vet-modal-header h3 { margin: 0; font-family: Georgia, serif; }
+.vet-modal-header p { margin: .15rem 0 0; color: #6b7a8d; font-size: .85rem; }
+.vet-modal-body { padding: .6rem 1.4rem; overflow-y: auto; flex: 1; min-height: 0; }
+.vet-modal-footer { display: flex; gap: .6rem; padding: 1rem 1.4rem 1.4rem; flex: none; }
+/* Decision shell (small confirm) */
+.vet-modal-box.decision { width: 420px; text-align: center; }
+.vet-modal-box.decision .vet-modal-body { padding-top: .2rem; }
+/* Form sections */
+.form-section-card { border: 1px solid #e9e2d5; border-radius: .7rem;
+  padding: 1rem 1.1rem; margin-bottom: .9rem; background: #fff; }
+.form-section-card > h4 { font-size: .8rem; text-transform: uppercase;
+  letter-spacing: 1px; color: #0f766e; margin: 0 0 .8rem; }
+/* fx21 floating-label fields */
+.fx21-field { position: relative; margin-bottom: 1rem; }
+.fx21-field .effect-21 { width: 100%; border: 1px solid #d8dee3; border-radius: 8px;
+  padding: .8rem .8rem .45rem; font-size: .95rem; background: #fff; }
+.fx21-field textarea.effect-21 { min-height: 64px; resize: vertical; }
+.fx21-field select.effect-21 { padding: .8rem .8rem .45rem; }
+.fx21-field > label { position: absolute; left: .8rem; top: .75rem; color: #6b7a8d;
+  font-size: .9rem; pointer-events: none; transition: all .18s ease;
+  background: #fff; padding: 0 .25rem; }
+.fx21-field .effect-21:focus + .focus-border,
+.fx21-field .has-content + .focus-border { outline: none; }
+.fx21-field .effect-21:focus { border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20,184,166,.18); outline: none; }
+.fx21-field .effect-21:focus ~ label,
+.fx21-field .effect-21.has-content ~ label,
+.fx21-field select.effect-21 ~ label { top: -.55rem; font-size: .68rem; color: #0f766e; }
+.fx21-field .focus-border { display: none; }
+/* Footer buttons */
+.btn-modal-cancel, .btn-modal-save { flex: 1; border-radius: 8px; padding: .6rem;
+  font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.btn-modal-cancel { background: #fff; border-color: #e0a3a3; color: #c62828; }
+.btn-modal-cancel:hover { background: linear-gradient(135deg, #e53935, #c62828); color: #fff; }
+.btn-modal-save { background: #2e7d32; color: #fff; }
+.btn-modal-save:hover { background: #1b5e20; }
+/* Read-only view rows */
+.view-rows { width: 100%; font-size: .9rem; }
+.view-rows th { text-align: left; color: #6b7a8d; font-weight: 600; width: 110px;
+  padding: .35rem .5rem .35rem 0; vertical-align: top; }
+.view-rows td { padding: .35rem 0; }
+@media (prefers-reduced-motion: reduce) {
+  .vet-modal-box { animation: none; } }

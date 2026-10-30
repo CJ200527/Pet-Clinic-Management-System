@@ -7,10 +7,11 @@
   --side-text: #cfe3de;
   --side-muted: #8fb3ad;
 }
-.shell { display: flex; min-height: 100vh; background: #f4f6f5; }
+.shell { min-height: 100vh; background: #f4f6f5; }
 .sidebar { width: 264px; flex: none; background: var(--side-bg); color: var(--side-text);
-  display: flex; flex-direction: column; padding: 1.4rem 1.1rem; gap: 1.1rem;
-  position: sticky; top: 0; height: 100vh; border-radius: 0 1.4rem 1.4rem 0; }
+  display: flex; flex-direction: column; padding: 1.1rem; gap: .9rem;
+  position: fixed; top: 0; bottom: 0; left: 0; overflow: hidden; z-index: 1020;
+  border-radius: 0 1.4rem 1.4rem 0; }
 .brand { display: flex; align-items: center; gap: .6rem; color: #fff;
   font-family: Georgia, serif; font-size: 1.25rem; text-decoration: none;
   padding-bottom: 1rem; border-bottom: 1px solid rgba(207,227,222,.25); }
@@ -21,8 +22,9 @@
   font-size: 1.3rem; font-weight: 700; flex: none; }
 .profile strong { display: block; color: #fff; font-size: .95rem; }
 .profile small { color: var(--side-muted); text-transform: capitalize; }
-.snav { display: flex; flex-direction: column; gap: .35rem; }
-.snav a { display: flex; align-items: center; gap: .75rem; padding: .7rem 1rem;
+.snav { display: flex; flex-direction: column; gap: .3rem; flex: 1 1 auto;
+  overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+.snav a { display: flex; align-items: center; gap: .75rem; padding: .58rem 1rem;
   border-radius: .9rem; color: var(--side-text); text-decoration: none; font-weight: 500; }
 .snav a:hover { background: var(--side-bg2); color: #fff; }
 .snav a.active { background: linear-gradient(135deg, var(--vet), var(--vet2)); color: #fff; }
@@ -30,24 +32,27 @@
 /* Nav group labels (single source; clinic.css must not duplicate) */
 .nav-group-label { font-size: .65rem; font-weight: 700; letter-spacing: 1.5px;
   text-transform: uppercase; color: #8fb3ad;
-  padding: .6rem 1rem 0; display: flex; align-items: center; gap: .6rem; }
+  padding: .5rem 1rem 0; display: flex; align-items: center; gap: .6rem; }
 .nav-group-label::after { content: ""; flex: 1; height: 1px;
   background: rgba(207,227,222,.25); }
-.side-foot { margin-top: auto; padding-top: 1rem; border-top: 1px solid rgba(207,227,222,.25); }
+.side-foot { flex: none; padding-top: .9rem; border-top: 1px solid rgba(207,227,222,.25); }
+.logout-form { margin: 0; }
 .logout-btn { display: flex; align-items: center; justify-content: center; gap: .6rem;
+  width: 100%; border: 0; cursor: pointer; font: inherit;
   background: #fff; color: #122826; font-weight: 600; border-radius: .9rem;
   padding: .7rem; text-decoration: none; }
 .logout-btn:hover { background: var(--vet2); color: #fff; }
 .logout-btn .ic { width: 20px; height: 20px; }
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main { margin-left: 264px; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
 .mobilebar { display: none; align-items: center; gap: .7rem; padding: .7rem 1rem;
   background: var(--side-bg); color: #fff; position: sticky; top: 0; z-index: 1030; }
 .mobilebar button { background: none; border: none; color: #fff; padding: .25rem; }
 .mobilebar .ic { width: 24px; height: 24px; }
 .content { padding: 1.5rem clamp(1rem, 3vw, 2rem); }
 @media (max-width: 767px) {
-  .sidebar { position: fixed; left: 0; top: 0; z-index: 1040; border-radius: 0 1.4rem 1.4rem 0;
+  .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 1040; border-radius: 0 1.4rem 1.4rem 0;
     transform: translateX(-105%); transition: transform .3s ease; }
   .shell.nav-open .sidebar { transform: none; }
+  .main { margin-left: 0; }
   .mobilebar { display: flex; }
 }

@@ -55,6 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => { if (live) window.location.reload(); }, 30000);
   });
 
+  // Cascade unveil is CSS-only (main.content.cascade) so it starts at first
+  // paint — no JS class-adding, which used to flash the content first.
+
   // Skeleton overlay: only plays on fresh login (?welcome=1), ~1.2s then fade.
   const skeleton = document.getElementById('skeleton-overlay');
   if (skeleton && skeleton.classList.contains('show')) {

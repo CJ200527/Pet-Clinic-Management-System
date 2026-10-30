@@ -15,10 +15,17 @@
       {% endwith %}
       {% if eligible %}
       <form method="POST" action="{{ url_for('admin_consultation_new') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="mb-3"><label class="form-label">Appointment</label>
           <select name="appointment_id" class="form-select" required>
             {% for a in eligible %}
             <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date }})</option>
+            {% endfor %}
+          </select></div>
+        <div class="mb-3"><label class="form-label">Attending Vet</label>
+          <select name="vet_id" class="form-select" required>
+            {% for v in active_vets %}
+            <option value="{{ v.id }}">Dr. {{ v.full_name }}</option>
             {% endfor %}
           </select></div>
         <div class="mb-3"><label class="form-label">Diagnosis</label>

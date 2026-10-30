@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paws & Care — Pet Clinic</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}?v=20261008" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/landing.css') }}?v=20261001" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/vet-modals.css') }}?v=20261006" rel="stylesheet">
 </head>
 <body>
 
@@ -25,7 +26,11 @@
         <a class="nav-link" href="#contact">Contact</a>
       </div>
       <div class="d-flex gap-2 align-items-center">
+        {% if signed_in %}
+        <a class="nav-link" href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+        {% else %}
         <a class="nav-link" href="#" onclick="openLoginCurtain();return false;">Login</a>
+        {% endif %}
         <a href="#booking-wrap" class="btn btn-vet btn-pill btn-arrow"><span>Book Now</span></a>
       </div>
     </div>
@@ -162,18 +167,20 @@
       {% endif %}
     {% endwith %}
     <form class="booking-bar" method="POST" action="{{ url_for('book_guest') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <div class="row g-3">
-        <div class="col-md-4">
-          <label class="form-label" for="gName">Your Name</label>
-          <input id="gName" type="text" name="guest_name" class="form-control" required>
+        <div class="col-md-3">
+          <label class="form-label" for="gName">Full Name</label>
+          <input id="gName" type="text" name="guest_name" class="form-control" maxlength="50" required placeholder="e.g. Maria Clara ñ. Santos">
+          <div id="gNameHelp" class="form-text text-muted" style="font-size: 0.72rem;">Letters, spaces, periods & ñ only.</div>
         </div>
-        <div class="col-md-4">
-          <label class="form-label" for="gPhone">Phone</label>
-          <input id="gPhone" type="tel" name="phone" class="form-control" required>
+        <div class="col-md-2" style="max-width: 220px;">
+          <label class="form-label" for="gPhone">Phone (PH 11 Digits)</label>
+          <input id="gPhone" type="tel" name="phone" class="form-control" maxlength="11" required placeholder="09XXXXXXXXX">
         </div>
         <div class="col-md-2">
           <label class="form-label" for="gPet">Pet Name</label>
-          <input id="gPet" type="text" name="pet_name" class="form-control" required>
+          <input id="gPet" type="text" name="pet_name" class="form-control" maxlength="30" required placeholder="Max 30 chars">
         </div>
         <div class="col-md-2">
           <label class="form-label" for="gSpecies">Species</label>
@@ -183,7 +190,7 @@
             <option>Reptile</option><option>Other</option>
           </select>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label" for="bService">Service</label>
           <select id="bService" name="service" class="form-select">
             <option>General Checkup</option>
@@ -197,12 +204,14 @@
         <div class="col-md-3">
           <label class="form-label" for="bDate">Date</label>
           <input id="bDate" type="date" name="appointment_date" class="form-control" min="{{ today }}" required>
+          <div id="bDatePretty" class="form-text text-muted" style="font-size: 0.72rem;">August 30, 2026</div>
         </div>
         <div class="col-md-3">
           <label class="form-label" for="bTime">Time</label>
           <input id="bTime" type="time" name="appointment_time" class="form-control" required>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
+        <div class="col-md-3">
+          <label class="form-label invisible d-none d-md-block">&nbsp;</label>
           <button type="submit" class="btn btn-dark w-100">Book Now</button>
         </div>
       </div>
@@ -220,8 +229,8 @@
         {% for vet in vets %}
         <div class="col-md-4"><div class="amenity">
           <div class="ic">👩‍⚕️👨‍⚕️</div>
-          <strong>{{ vet.full_name }}</strong><br>
-          <small class="text-muted">Licensed Veterinarian</small>
+          <strong>Dr. {{ vet.full_name }}</strong><br>
+          <small class="text-muted">{{ vet.specialty or 'Licensed Veterinarian' }}</small>
         </div></div>
         {% endfor %}
       {% else %}
@@ -258,7 +267,7 @@
       <div class="col-md-3">
         <h6>Quick Links</h6>
         <a href="#about">About</a><br><a href="#services">Services</a><br>
-        <a href="#booking-wrap">Booking</a><br><a href="#" onclick="openLoginCurtain();return false;">Login</a>
+        <a href="#booking-wrap">Booking</a><br>{% if signed_in %}<a href="{{ url_for('admin_dashboard') }}">Dashboard</a>{% else %}<a href="#" onclick="openLoginCurtain();return false;">Login</a>{% endif %}
       </div>
       <div class="col-md-3">
         <h6>Contact</h6>
@@ -275,7 +284,7 @@
   </div>
 </footer>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}?v=20261008"></script>
 <script>window.AUTH_STATE = "{{ auth or '' }}";</script>
 <!-- Login curtain: roll-down card (ported from EAVS adminCurtain). Back to site rolls it up. -->
 <div id="loginCurtain" aria-hidden="true">
@@ -283,13 +292,16 @@
   <div class="curtain-card">
     <p class="eyebrow text-center">🐾 Paws & Care</p>
     <h2 class="serif text-center">Welcome Back</h2>
-    <p class="text-muted text-center">Login to book visits and manage your pets.</p>
+    <p class="text-muted text-center">Admin and Staff portal login.</p>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, msg in messages %}
-        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+        {% if not msg.startswith("Booking received!") %}
+          <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
+        {% endif %}
       {% endfor %}
     {% endwith %}
     <form method="POST" action="{{ url_for('login') }}" autocomplete="off" id="loginCurtainForm">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <input type="hidden" name="next" id="cNext" value="{{ pre_next or '' }}">
       <input type="hidden" name="service" id="cService" value="{{ pre_service or '' }}">
       <input type="hidden" name="date" id="cDate" value="{{ pre_date or '' }}">
@@ -304,22 +316,70 @@
              readonly onfocus="this.removeAttribute('readonly')">
       <button class="btn btn-vet btn-pill btn-arrow w-100 mt-3"><span>Login</span></button>
     </form>
-    <p class="text-center mt-3 mb-1"><small>Staff? Use your assigned username.</small></p>
+    <p class="text-center mt-3 mb-1"><small>Admin & Staff login only.</small></p>
     <a href="#" onclick="closeLoginCurtain();return false;" class="d-block text-center">← Back to site</a>
   </div>
 </div>
-<!-- Auth error popup: Cancel closes all, Confirm keeps curtain open for retry -->
-<div id="authPopup" aria-hidden="true">
-  <div class="popup-box">
-    <div class="popup-ic">⚠️</div>
-    <h5 class="serif">Login Failed</h5>
-    <p class="text-muted">Invalid username or password.<br>Please try again.</p>
-    <div class="d-flex gap-2 justify-content-center">
-      <button class="btn btn-outline-ink btn-pill" onclick="authPopupCancel()">Cancel</button>
-      <button class="btn btn-vet btn-pill" onclick="authPopupConfirm()">Confirm</button>
+<!-- Auth error popup (CPSC decision shell): Cancel closes all, Confirm retries -->
+<div id="authPopup" class="vet-overlay" aria-hidden="true">
+  <div class="vet-modal-box decision">
+    <div class="vet-modal-header"><h3>Login Failed</h3></div>
+    <div class="vet-modal-body"><p class="text-muted">Invalid username or password.<br>Please try again.</p></div>
+    <div class="vet-modal-footer">
+      <button type="button" class="btn-modal-cancel" onclick="authPopupCancel()">Cancel</button>
+      <button type="button" class="btn-modal-save" onclick="authPopupConfirm()">Confirm</button>
     </div>
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/main.js') }}?v=20261001"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const gName = document.getElementById('gName');
+  const gPhone = document.getElementById('gPhone');
+  const bDate = document.getElementById('bDate');
+  const bDatePretty = document.getElementById('bDatePretty');
+  
+
+  if (gName) {
+    gName.addEventListener('input', (e) => {
+      // Allow only alphabetical letters, spaces, periods, and enye (ñ, Ñ)
+      let val = e.target.value;
+      let clean = '';
+      for (let i = 0; i < val.length; i++) {
+        let c = val[i];
+        if (/[a-zA-ZñÑ\s\.]/.test(c)) {
+          clean += c;
+        }
+      }
+      e.target.value = clean;
+    });
+  }
+
+  if (gPhone) {
+    gPhone.addEventListener('input', (e) => {
+      let val = e.target.value.replace(/\D/g, '');
+      if (val.length > 11) {
+        val = val.substring(0, 11);
+      }
+      e.target.value = val;
+    });
+  }
+
+  if (bDate && bDatePretty) {
+    bDate.addEventListener('change', (e) => {
+      if (!e.target.value) {
+        bDatePretty.textContent = 'August 30, 2026';
+        return;
+      }
+      const parts = e.target.value.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        bDatePretty.textContent = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      }
+    });
+  }
+
+});
+</script>
 </body>
 </html>

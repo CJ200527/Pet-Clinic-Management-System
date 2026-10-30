@@ -89,7 +89,7 @@
   <div class="chart-card"><h6>Top Services <small class="text-muted">{{ period }}</small></h6>
     <div class="chart-box"><canvas id="chServices"></canvas></div></div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}?v=20261008"></script>
 <script>
 (function () {
   const data = {{ (charts or {})|tojson }};
@@ -106,11 +106,15 @@
         categoryPercentage: 0.85, barPercentage: 0.9 }] },
     options: { ...fill, plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  const qSum = (data.queue_load || []).reduce((a, b) => a + b, 0);
+  const qEmpty = qSum === 0;
   mk('chQueue', { type: 'doughnut',
-    data: { labels: ['Waiting', 'Serving', 'Done', 'Skipped'],
-      datasets: [{ data: data.queue_load, backgroundColor: ['#f59e0b', '#14b8a6', '#2e7d32', '#ef4444'] }] },
-    options: { ...fill, layout: { padding: 8 },
-      plugins: { legend: { position: 'bottom', align: 'center' } } } });
+    data: { labels: qEmpty ? ['No queue today'] : ['Waiting', 'Serving', 'Done', 'Skipped'],
+      datasets: [{ data: qEmpty ? [1] : data.queue_load,
+        backgroundColor: qEmpty ? ['#e2e8f0'] : ['#f59e0b', '#14b8a6', '#2e7d32', '#ef4444'] }] },
+    options: { ...fill, layout: { padding: 8 }, cutout: '62%',
+      plugins: { legend: { position: 'bottom', align: 'center' },
+        tooltip: { enabled: !qEmpty } } } });
   mk('chServices', { type: 'bar',
     data: { labels: data.services,
       datasets: [{ data: data.service_counts, backgroundColor: '#14b8a6', borderRadius: 4,

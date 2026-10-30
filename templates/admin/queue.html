@@ -112,6 +112,7 @@
               <td class="action-cell">
                 {% if e.status == 'waiting' %}
                 <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                   <input type="hidden" name="status" value="serving">
                   <button class="icon-act icon-approve" title="Start serving">
                     <svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></button>
@@ -119,12 +120,15 @@
                 {% endif %}
                 {% if e.status in ('waiting', 'serving') %}
                 <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                   <input type="hidden" name="status" value="done">
                   <button class="icon-act icon-view" title="Mark done">
                     <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></button>
                 </form>
-                <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline"
-                      onsubmit="return confirm('Skip #{{ e.queue_number }}?')">
+                <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline needs-confirm"
+                      data-confirm-title="Skip queue"
+                      data-confirm-msg="Skip #{{ e.queue_number }}?">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                   <input type="hidden" name="status" value="skipped">
                   <button class="icon-act icon-reject" title="Skip">
                     <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
@@ -141,6 +145,7 @@
       {% if session.role == 'admin' %}
       {% if eligible %}
       <form method="POST" action="{{ url_for('admin_queue') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="mb-2"><label class="form-label">Appointment</label>
           <select name="appointment_id" class="form-select" required>
             {% for a in eligible %}

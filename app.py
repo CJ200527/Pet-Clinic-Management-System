@@ -1,15 +1,26 @@
 """app.py - Pet Clinic Management System (Flask + MySQL via XAMPP)."""
-from datetime import date
+import os
+import secrets
+import time
+from contextlib import contextmanager
+from datetime import date, timedelta
 from functools import wraps
 
 import bcrypt
 import pymysql
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import (Flask, abort, flash, redirect, render_template, request,
+                   session, url_for)
 
 import config
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("PETCLINIC_COOKIE_SECURE") == "1",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
 
 
 def db():
@@ -18,6 +29,55 @@ def db():
     except pymysql.MySQLError as e:
         print(f"DB connection failed: {e}")
         return None
+
+
+@contextmanager
+def tx(conn):
+    """Explicit transaction on top of the autocommit connection."""
+    conn.begin()
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def csrf_token():
+    if not session.get("_csrf"):
+        session["_csrf"] = secrets.token_urlsafe(32)
+    return session["_csrf"]
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+@app.before_request
+def csrf_protect():
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        sent = request.form.get("_csrf", "")
+        expected = session.get("_csrf", "")
+        if not expected or not sent or not secrets.compare_digest(sent, expected):
+            abort(400, description="Invalid or missing CSRF token.")
+
+
+LOGIN_WINDOW = 300
+LOGIN_MAX_FAILS = 5
+_login_fails = {}
+
+
+def _login_key(username):
+    return f"{request.remote_addr or '?'}|{username.lower()}"
+
+
+def _login_locked(key):
+    now = time.time()
+    stamps = [t for t in _login_fails.get(key, ()) if now - t < LOGIN_WINDOW]
+    if stamps:
+        _login_fails[key] = stamps
+    else:
+        _login_fails.pop(key, None)
+    return len(stamps) >= LOGIN_MAX_FAILS
 
 
 def login_required(view):
@@ -44,10 +104,10 @@ def role_required(*roles):
 
 
 def dashboard_for(role):
-    if role in ("admin", "staff", "vet"):
+    if role in ("admin", "staff"):
         # Shared management dashboard (view-only unless admin).
         return url_for("admin_dashboard")
-    return url_for("index")  # owner rows are records; no login surface
+    return url_for("index")  # clients are record rows; no login surface
 
 
 @app.context_processor
@@ -91,14 +151,15 @@ def safe_next(value, default):
 
 @app.route("/")
 def index():
-    if "user_id" in session:
-        return redirect(dashboard_for(session.get("role", "owner")))
+    # Always the public landing page, even with an active session: opening the
+    # app never drops straight into the admin dashboard. Signed-in staff get a
+    # Dashboard shortcut instead of the Login button.
     vets = []
     conn = db()
     if conn is not None:
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT full_name FROM users WHERE role='vet'"
+                cur.execute("SELECT full_name, specialty FROM vets WHERE is_active=1"
                             " ORDER BY full_name ASC")
                 vets = cur.fetchall()
         except pymysql.MySQLError as e:
@@ -113,7 +174,8 @@ def index():
                            auth=auth, pre_next=request.args.get("next", ""),
                            pre_service=request.args.get("service", ""),
                            pre_date=request.args.get("date", ""),
-                           pre_time=request.args.get("time", ""))
+                           pre_time=request.args.get("time", ""),
+                           signed_in=("user_id" in session))
 
 
 # ---------------- Auth ----------------
@@ -137,7 +199,12 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
+        key = _login_key(username)
+        if _login_locked(key):
+            flash("Too many failed attempts. Please wait a few minutes.", "danger")
+            return redirect(url_for("index", auth="failed"))
         if not username or not password:
+            _login_fails.setdefault(key, []).append(time.time())
             return redirect(url_for("index", auth="failed"))
         else:
             conn = db()
@@ -158,11 +225,14 @@ def login():
                     except ValueError:
                         ok = False  # corrupt hash in DB: fail closed, never 500
                     if ok and user["status"] != "approved":
-                        # Correct password, inactive account: fail closed with reason.
-                        print(f"Login blocked: {username} is {user['status']}")
+                        # Correct password, inactive account: fail closed.
+                        print("Login blocked: inactive account.")
+                        _login_fails.setdefault(key, []).append(time.time())
                         return redirect(url_for("index", auth="failed"))
                     if ok:
+                        _login_fails.pop(key, None)
                         session.clear()
+                        session.permanent = True
                         session["user_id"] = int(user["id"])
                         session["full_name"] = user["full_name"]
                         session["role"] = user["role"]
@@ -172,6 +242,7 @@ def login():
                             target += "?welcome=1"
                         return redirect(target)
                     # Failure: back to landing, curtain auto-opens with error popup.
+                    _login_fails.setdefault(key, []).append(time.time())
                     return redirect(url_for("index", auth="failed", **{k: v for k, v in
                         (("next", nxt), ("service", pre_service),
                          ("date", pre_date), ("time", pre_time)) if v}))
@@ -190,7 +261,7 @@ def register():
 
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
     return redirect(url_for("index"))
@@ -215,8 +286,10 @@ def book_guest():
     errors = []
     if not name:
         errors.append("Your name is required.")
-    if len(phone) < 7:
-        errors.append("A valid phone number is required.")
+    if not phone:
+        errors.append("Phone number is required.")
+    elif not phone.startswith("09") or len(phone) != 11:
+        errors.append("Invalid phone number: Philippine mobile numbers must start with '09' and be exactly 11 digits (e.g. 09123456789).")
     if not pet_name:
         errors.append("Pet name is required.")
     if species not in SPECIES_CHOICES:
@@ -239,40 +312,36 @@ def book_guest():
         flash("Booking failed: database unavailable. Please call the clinic.", "danger")
         return redirect(url_for("index") + "#booking-wrap")
     try:
-        import secrets
-        with conn.cursor() as cur:
-            # Reuse owner record by phone; otherwise auto-create one.
-            cur.execute("SELECT id FROM users WHERE phone=%s AND role='owner' LIMIT 1",
-                        (phone,))
+        with tx(conn), conn.cursor() as cur:
+            # Reuse client record by phone; otherwise auto-create one. A public
+            # form never renames an existing client.
+            cur.execute("SELECT id FROM clients WHERE phone=%s LIMIT 1", (phone,))
             row = cur.fetchone()
             if row:
-                owner_id = row["id"]
-                if row.get("full_name") != name:
-                    cur.execute("UPDATE users SET full_name=%s WHERE id=%s",
-                                (name, owner_id))
+                client_id = row["id"]
             else:
-                base = f"guest{phone}"[:40]
-                username = base
-                cur.execute("SELECT id FROM users WHERE username=%s LIMIT 1", (username,))
-                if cur.fetchone():
-                    username = f"{base}{secrets.randbelow(9000) + 1000}"[:50]
-                temp_pw = bcrypt.hashpw(secrets.token_urlsafe(16).encode(),
-                                        bcrypt.gensalt()).decode()
                 cur.execute(
-                    "INSERT INTO users (full_name, username, email, password, role, phone)"
-                    " VALUES (%s,%s,%s,%s,'owner',%s)",
-                    (name, username, f"{username}@guest.local", temp_pw, phone))
-                owner_id = cur.lastrowid
+                    "INSERT INTO clients (full_name, phone) VALUES (%s,%s)",
+                    (name, phone))
+                client_id = cur.lastrowid
+            # Reuse the pet registered for this client; only add a new row once.
             cur.execute(
-                "INSERT INTO pets (owner_id, name, species) VALUES (%s,%s,%s)",
-                (owner_id, pet_name, species))
-            pet_id = cur.lastrowid
+                "SELECT id FROM pets WHERE client_id=%s AND LOWER(name)=LOWER(%s)"
+                " AND species=%s LIMIT 1", (client_id, pet_name, species))
+            pet = cur.fetchone()
+            if pet:
+                pet_id = pet["id"]
+            else:
+                cur.execute(
+                    "INSERT INTO pets (client_id, name, species) VALUES (%s,%s,%s)",
+                    (client_id, pet_name, species))
+                pet_id = cur.lastrowid
             cur.execute(
                 "INSERT INTO appointments"
-                " (pet_id, owner_id, appointment_date, appointment_time, reason,"
+                " (pet_id, client_id, appointment_date, appointment_time, reason,"
                 " source, status)"
                 " VALUES (%s,%s,%s,%s,%s,'guest','pending')",
-                (pet_id, owner_id, appt_date, appt_time, service))
+                (pet_id, client_id, appt_date, appt_time, service))
             ref = cur.lastrowid
         flash(f"Booking received! Reference #{ref} — {service} for {pet_name}"
               f" on {appt_date} at {appt_time}. We'll confirm by phone shortly.",
@@ -416,7 +485,7 @@ def admin_dashboard():
                 cur.execute(
                     "SELECT q.queue_number, p.name AS pet_name, o.full_name AS owner_name"
                     " FROM clinic_queue q JOIN pets p ON p.id=q.pet_id"
-                    " JOIN users o ON o.id=q.owner_id"
+                    " JOIN clients o ON o.id=q.client_id"
                     " WHERE q.queue_date=CURDATE() AND q.status='serving'"
                     " ORDER BY q.queue_number ASC LIMIT 1"
                 )
@@ -434,8 +503,8 @@ def admin_dashboard():
                     " a.created_at, p.name AS pet_name, o.full_name AS owner_name,"
                     " v.full_name AS vet_name"
                     " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                    " JOIN users o ON o.id=a.owner_id"
-                    " LEFT JOIN users v ON v.id=a.vet_id"
+                    " JOIN clients o ON o.id=a.client_id"
+                    " LEFT JOIN vets v ON v.id=a.vet_id"
                     f" WHERE {period_cond('a.created_at', period)}"
                     " ORDER BY a.created_at DESC LIMIT 8"
                 )
@@ -444,7 +513,7 @@ def admin_dashboard():
                     "SELECT a.id, a.appointment_date, a.appointment_time, a.reason,"
                     " p.name AS pet_name, o.full_name AS owner_name, o.phone"
                     " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                    " JOIN users o ON o.id=a.owner_id"
+                    " JOIN clients o ON o.id=a.client_id"
                     " WHERE a.status='pending'"
                     " ORDER BY a.created_at ASC LIMIT 10"
                 )
@@ -496,8 +565,8 @@ def admin_appointments():
                        " p.name AS pet_name, o.full_name AS owner_name, o.phone,"
                        " v.full_name AS vet_name"
                        " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                       " JOIN users o ON o.id=a.owner_id"
-                       " LEFT JOIN users v ON v.id=a.vet_id"
+                       " JOIN clients o ON o.id=a.client_id"
+                       " LEFT JOIN vets v ON v.id=a.vet_id"
                        f" WHERE {pcond}")
                 params = []
                 if status != "all":
@@ -569,8 +638,8 @@ def _today_queue(cur, period="All Time", q="", status="all"):
         "SELECT q.id, q.queue_number, q.status, q.appointment_id, q.queue_date,"
         " p.name AS pet_name, o.full_name AS owner_name, v.full_name AS vet_name"
         " FROM clinic_queue q JOIN pets p ON p.id=q.pet_id"
-        " JOIN users o ON o.id=q.owner_id"
-        " LEFT JOIN users v ON v.id=q.vet_id"
+        " JOIN clients o ON o.id=q.client_id"
+        " LEFT JOIN vets v ON v.id=q.vet_id"
         f" WHERE q.queue_date<=CURDATE(){cond} ORDER BY q.queue_date DESC,"
         " q.queue_number ASC",
         params,
@@ -595,7 +664,7 @@ def admin_queue():
         flash("Database connection failed.", "danger")
         return render_template("admin/queue.html", queue=[], eligible=[], qkpi=qkpi,
                                q=q, qstatus=qstatus, now_serving=now_serving,
-                               up_next=up_next)
+                               up_next=up_next, statuses=QUEUE_STATUSES)
     try:
         with conn.cursor() as cur:
             if request.method == "POST":
@@ -608,28 +677,33 @@ def admin_queue():
                     appt_id = 0
                 if appt_id > 0:
                     cur.execute(
-                        "SELECT pet_id, owner_id, vet_id FROM appointments"
+                        "SELECT pet_id, client_id, vet_id FROM appointments"
                         " WHERE id=%s AND status='approved' LIMIT 1", (appt_id,)
                     )
                     appt = cur.fetchone()
                     if not appt:
                         flash("Only approved appointments can join the queue.", "danger")
                     else:
-                        cur.execute(
-                            "SELECT COALESCE(MAX(queue_number),0)+1 AS nxt FROM clinic_queue"
-                            " WHERE queue_date=CURDATE()"
-                        )
-                        nxt = cur.fetchone()["nxt"]
-                        try:
-                            cur.execute(
-                                "INSERT INTO clinic_queue"
-                                " (appointment_id, pet_id, owner_id, vet_id, queue_number, queue_date)"
-                                " VALUES (%s,%s,%s,%s,%s,CURDATE())",
-                                (appt_id, appt["pet_id"], appt["owner_id"], appt["vet_id"], nxt),
-                            )
-                            flash(f"Added to queue as #{nxt}.", "success")
-                        except pymysql.IntegrityError:
-                            flash("That appointment is already queued.", "danger")
+                        for attempt in range(2):
+                            try:
+                                with tx(conn):
+                                    cur.execute(
+                                        "SELECT COALESCE(MAX(queue_number),0)+1 AS nxt"
+                                        " FROM clinic_queue WHERE queue_date=CURDATE()")
+                                    nxt = cur.fetchone()["nxt"]
+                                    cur.execute(
+                                        "INSERT INTO clinic_queue"
+                                        " (appointment_id, pet_id, client_id, vet_id,"
+                                        " queue_number, queue_date)"
+                                        " VALUES (%s,%s,%s,%s,%s,CURDATE())",
+                                        (appt_id, appt["pet_id"], appt["client_id"],
+                                         appt["vet_id"], nxt))
+                                flash(f"Added to queue as #{nxt}.", "success")
+                                break
+                            except pymysql.IntegrityError:
+                                # Duplicate ticket number: recompute once.
+                                if attempt:
+                                    flash("That appointment is already queued.", "danger")
             queue = _today_queue(cur, period, q, qstatus)
             for key in ("waiting", "serving", "done", "skipped"):
                 cur.execute("SELECT COUNT(*) AS c FROM clinic_queue"
@@ -640,7 +714,7 @@ def admin_queue():
             cur.execute(
                 "SELECT q.queue_number, p.name AS pet_name, o.full_name AS owner_name"
                 " FROM clinic_queue q JOIN pets p ON p.id=q.pet_id"
-                " JOIN users o ON o.id=q.owner_id"
+                " JOIN clients o ON o.id=q.client_id"
                 " WHERE q.queue_date=CURDATE() AND q.status='serving'"
                 " ORDER BY q.queue_number ASC LIMIT 1"
             )
@@ -713,6 +787,7 @@ def admin_consultations():
         rx = "all"
     rows = []
     eligible = []
+    active_vets = []
     ckpi = {"total": 0, "period": 0, "withrx": 0}
     conn = db()
     if conn is None:
@@ -731,7 +806,7 @@ def admin_consultations():
                 sel = ("SELECT c.id, c.diagnosis, c.consultation_date, p.name AS pet_name,"
                        " u.full_name AS vet_name"
                        " FROM consultations c JOIN pets p ON p.id=c.pet_id"
-                       " JOIN users u ON u.id=c.vet_id"
+                       " JOIN vets u ON u.id=c.vet_id"
                        f" WHERE {period_cond('c.consultation_date', period)}")
                 params = []
                 if rx == "yes":
@@ -751,36 +826,32 @@ def admin_consultations():
                     "SELECT a.id, a.appointment_date, p.name AS pet_name,"
                     " o.full_name AS owner_name"
                     " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                    " JOIN users o ON o.id=a.owner_id"
+                    " JOIN clients o ON o.id=a.client_id"
                     " WHERE a.status='approved'"
                     " ORDER BY a.appointment_date ASC LIMIT 30"
                 )
                 eligible = cur.fetchall()
                 cur.execute(
-                    "SELECT a.id, a.appointment_date, p.name AS pet_name,"
-                    " o.full_name AS owner_name"
-                    " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                    " JOIN users o ON o.id=a.owner_id"
-                    " WHERE a.status='approved'"
-                    " ORDER BY a.appointment_date ASC LIMIT 30"
+                    "SELECT id, full_name FROM vets WHERE is_active=1"
+                    " ORDER BY full_name ASC"
                 )
-                eligible = cur.fetchall()
+                active_vets = cur.fetchall()
         except pymysql.MySQLError as e:
             print(f"Consult list failed: {e}")
         finally:
             conn.close()
     return render_template("admin/consultations.html", rows=rows, ckpi=ckpi, q=q,
-                           rx=rx, eligible=eligible)
+                           rx=rx, eligible=eligible, active_vets=active_vets)
 
 
 @app.route("/admin/consultations/new", methods=["GET", "POST"])
 @role_required("admin", "staff")
 def admin_consultation_new():
-    vet_id = int(session["user_id"])
     conn = db()
     if conn is None:
         flash("Database connection failed.", "danger")
-        return render_template("admin/consultation_form.html", eligible=[])
+        return render_template("admin/consultation_form.html", eligible=[],
+                               active_vets=[])
     try:
         with conn.cursor() as cur:
             if request.method == "POST":
@@ -788,6 +859,10 @@ def admin_consultation_new():
                     appt_id = int(request.form.get("appointment_id", 0))
                 except ValueError:
                     appt_id = 0
+                try:
+                    vet_id = int(request.form.get("vet_id", 0))
+                except ValueError:
+                    vet_id = 0
                 diagnosis = request.form.get("diagnosis", "").strip()
                 treatment = request.form.get("treatment", "").strip() or None
                 notes = request.form.get("notes", "").strip() or None
@@ -797,69 +872,91 @@ def admin_consultation_new():
                     bill_amount = -1
                 if appt_id <= 0 or not diagnosis:
                     flash("Appointment and diagnosis are required.", "danger")
+                elif vet_id <= 0:
+                    flash("Select the attending vet.", "danger")
                 elif bill_amount < 0:
                     flash("Bill amount must be zero or more.", "danger")
                 else:
-                    cur.execute(
-                        "SELECT pet_id FROM appointments"
-                        " WHERE id=%s AND status='approved' LIMIT 1",
-                        (appt_id,),
-                    )
-                    appt = cur.fetchone()
-                    if not appt:
-                        flash("Invalid appointment (must be approved).", "danger")
+                    cur.execute("SELECT id FROM vets WHERE id=%s AND is_active=1"
+                                " LIMIT 1", (vet_id,))
+                    if not cur.fetchone():
+                        flash("Invalid vet (must be active).", "danger")
                     else:
                         cur.execute(
-                            "INSERT INTO consultations"
-                            " (appointment_id, pet_id, vet_id, diagnosis, treatment, notes)"
-                            " VALUES (%s,%s,%s,%s,%s,%s)",
-                            (appt_id, appt["pet_id"], vet_id, diagnosis, treatment, notes),
-                        )
-                        consult_id = cur.lastrowid
-                        cur.execute(
-                            "UPDATE appointments SET status='completed' WHERE id=%s",
+                            "SELECT pet_id FROM appointments"
+                            " WHERE id=%s AND status='approved' LIMIT 1",
                             (appt_id,),
                         )
-                        if bill_amount > 0:
-                            cur.execute(
-                                "SELECT owner_id FROM appointments WHERE id=%s LIMIT 1",
-                                (appt_id,))
-                            owner_id = cur.fetchone()["owner_id"]
-                            cur.execute(
-                                "INSERT INTO invoices (owner_id, appointment_id,"
-                                " consultation_id, amount) VALUES (%s,%s,%s,%s)",
-                                (owner_id, appt_id, consult_id, bill_amount))
-                            flash(f"Consultation logged + bill ₱{bill_amount:.2f} issued.",
-                                  "success")
+                        appt = cur.fetchone()
+                        if not appt:
+                            flash("Invalid appointment (must be approved).", "danger")
                         else:
-                            flash("Consultation logged.", "success")
-                        conn.close()
-                        return redirect(url_for("admin_consultation_detail",
-                                                consult_id=consult_id))
+                            with tx(conn):
+                                cur.execute(
+                                    "INSERT INTO consultations"
+                                    " (appointment_id, pet_id, vet_id, diagnosis,"
+                                    " treatment, notes)"
+                                    " VALUES (%s,%s,%s,%s,%s,%s)",
+                                    (appt_id, appt["pet_id"], vet_id, diagnosis,
+                                     treatment, notes),
+                                )
+                                consult_id = cur.lastrowid
+                                cur.execute(
+                                    "UPDATE appointments SET status='completed', vet_id=%s"
+                                    " WHERE id=%s",
+                                    (vet_id, appt_id),
+                                )
+                                cur.execute(
+                                    "UPDATE clinic_queue SET vet_id=%s"
+                                    " WHERE appointment_id=%s",
+                                    (vet_id, appt_id),
+                                )
+                                if bill_amount > 0:
+                                    cur.execute(
+                                        "SELECT client_id FROM appointments"
+                                        " WHERE id=%s LIMIT 1", (appt_id,))
+                                    client_id = cur.fetchone()["client_id"]
+                                    cur.execute(
+                                        "INSERT INTO invoices (client_id, appointment_id,"
+                                        " consultation_id, amount)"
+                                        " VALUES (%s,%s,%s,%s)",
+                                        (client_id, appt_id, consult_id, bill_amount))
+                            if bill_amount > 0:
+                                flash(f"Consultation logged + bill ₱{bill_amount:.2f} issued.",
+                                      "success")
+                            else:
+                                flash("Consultation logged.", "success")
+                            conn.close()
+                            return redirect(url_for("admin_consultation_detail",
+                                                    consult_id=consult_id))
             cur.execute(
                 "SELECT a.id, a.appointment_date, p.name AS pet_name, o.full_name AS owner_name"
                 " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                " JOIN users o ON o.id=a.owner_id"
+                " JOIN clients o ON o.id=a.client_id"
                 " WHERE a.status='approved'"
                 " ORDER BY a.appointment_date ASC LIMIT 30"
             )
             eligible = cur.fetchall()
+            cur.execute("SELECT id, full_name FROM vets WHERE is_active=1"
+                        " ORDER BY full_name ASC")
+            active_vets = cur.fetchall()
     except pymysql.MySQLError as e:
         print(f"Consult create failed: {e}")
         flash("Could not save consultation.", "danger")
         eligible = []
+        active_vets = []
     finally:
         try:
             conn.close()
         except Exception:
             pass
-    return render_template("admin/consultation_form.html", eligible=eligible)
+    return render_template("admin/consultation_form.html", eligible=eligible,
+                           active_vets=active_vets)
 
 
 @app.route("/admin/consultations/<int:consult_id>", methods=["GET", "POST"])
 @role_required("admin", "staff")
 def admin_consultation_detail(consult_id):
-    vet_id = int(session["user_id"])
     conn = db()
     if conn is None:
         flash("Database connection failed.", "danger")
@@ -867,8 +964,10 @@ def admin_consultation_detail(consult_id):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT c.*, p.name AS pet_name FROM consultations c"
-                " JOIN pets p ON p.id=c.pet_id WHERE c.id=%s LIMIT 1", (consult_id,)
+                "SELECT c.*, p.name AS pet_name, v.full_name AS vet_name"
+                " FROM consultations c"
+                " JOIN pets p ON p.id=c.pet_id"
+                " JOIN vets v ON v.id=c.vet_id WHERE c.id=%s LIMIT 1", (consult_id,)
             )
             consult = cur.fetchone()
             if not consult:
@@ -895,17 +994,25 @@ def admin_consultation_detail(consult_id):
                         flash(f"Not enough stock of {item['item_name']}"
                               f" ({item['quantity']} left).", "danger")
                     else:
-                        cur.execute(
-                            "INSERT INTO prescriptions_treatments"
-                            " (consultation_id, inventory_id, dosage, quantity_used, instructions)"
-                            " VALUES (%s,%s,%s,%s,%s)",
-                            (consult_id, inventory_id, dosage, qty, instructions),
-                        )
-                        cur.execute(
-                            "UPDATE inventory SET quantity=quantity-%s WHERE id=%s",
-                            (qty, inventory_id),
-                        )
-                        flash("Prescription added; stock deducted.", "success")
+                        try:
+                            with tx(conn):
+                                cur.execute(
+                                    "UPDATE inventory SET quantity=quantity-%s"
+                                    " WHERE id=%s AND quantity>=%s",
+                                    (qty, inventory_id, qty))
+                                if cur.rowcount != 1:
+                                    raise ValueError("stock changed")
+                                cur.execute(
+                                    "INSERT INTO prescriptions_treatments"
+                                    " (consultation_id, inventory_id, dosage,"
+                                    " quantity_used, instructions)"
+                                    " VALUES (%s,%s,%s,%s,%s)",
+                                    (consult_id, inventory_id, dosage, qty,
+                                     instructions))
+                            flash("Prescription added; stock deducted.", "success")
+                        except ValueError:
+                            flash("Stock changed while saving. Please retry.",
+                                  "danger")
                 else:
                     cur.execute(
                         "INSERT INTO prescriptions_treatments"
@@ -1083,9 +1190,15 @@ def admin_inventory_delete(item_id):
     else:
         try:
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM inventory WHERE id=%s", (item_id,))
-                flash("Item deleted." if cur.rowcount else "Item not found.",
-                      "success" if cur.rowcount else "danger")
+                cur.execute("SELECT COUNT(*) AS c FROM prescriptions_treatments"
+                            " WHERE inventory_id=%s", (item_id,))
+                if cur.fetchone()["c"]:
+                    flash("Cannot delete: this item is referenced by existing"
+                          " prescriptions.", "danger")
+                else:
+                    cur.execute("DELETE FROM inventory WHERE id=%s", (item_id,))
+                    flash("Item deleted." if cur.rowcount else "Item not found.",
+                          "success" if cur.rowcount else "danger")
         except pymysql.MySQLError as e:
             print(f"Inventory delete failed: {e}")
             flash("Could not delete item.", "danger")
@@ -1114,6 +1227,7 @@ def admin_invoices():
     if conn is None:
         flash("Database connection failed.", "danger")
         return render_template("admin/invoices.html", invoices=[], owners=[],
+                               vkpi=vkpi, q=q, vstatus=vstatus,
                                statuses=INV_STATUSES)
     try:
         with conn.cursor() as cur:
@@ -1122,7 +1236,8 @@ def admin_invoices():
                     flash("Only Admin can issue invoices.", "danger")
                     return redirect(url_for("admin_invoices"))
                 try:
-                    owner_id = int(request.form.get("owner_id", 0))
+                    owner_id = int(request.form.get("client_id",
+                                                    request.form.get("owner_id", 0)))
                 except ValueError:
                     owner_id = 0
                 appt_raw = request.form.get("appointment_id", "")
@@ -1134,23 +1249,44 @@ def admin_invoices():
                 except ValueError:
                     amount = 0
                 if owner_id <= 0:
-                    flash("Select an owner.", "danger")
+                    flash("Select a client.", "danger")
                 elif amount <= 0:
                     flash("Amount must be more than zero.", "danger")
                 else:
-                    cur.execute("SELECT id FROM users WHERE id=%s AND role='owner' LIMIT 1",
+                    cur.execute("SELECT id FROM clients WHERE id=%s LIMIT 1",
                                 (owner_id,))
                     if not cur.fetchone():
-                        flash("Invalid owner.", "danger")
+                        flash("Invalid client.", "danger")
                     else:
-                        cur.execute(
-                            "INSERT INTO invoices (owner_id, appointment_id, consultation_id, amount)"
-                            " VALUES (%s,%s,%s,%s)",
-                            (owner_id, appt_id, cons_id, amount),
-                        )
-                        flash("Invoice issued.", "success")
-                        conn.close()
-                        return redirect(url_for("admin_invoices"))
+                        ref_error = None
+                        if appt_id is not None:
+                            cur.execute(
+                                "SELECT client_id FROM appointments WHERE id=%s"
+                                " LIMIT 1", (appt_id,))
+                            appt = cur.fetchone()
+                            if not appt or appt["client_id"] != owner_id:
+                                ref_error = ("That appointment does not belong to"
+                                             " the selected client.")
+                        if ref_error is None and cons_id is not None:
+                            cur.execute(
+                                "SELECT a.client_id FROM consultations c"
+                                " JOIN appointments a ON a.id=c.appointment_id"
+                                " WHERE c.id=%s LIMIT 1", (cons_id,))
+                            cons = cur.fetchone()
+                            if not cons or cons["client_id"] != owner_id:
+                                ref_error = ("That consultation does not belong to"
+                                             " the selected client.")
+                        if ref_error:
+                            flash(ref_error, "danger")
+                        else:
+                            cur.execute(
+                                "INSERT INTO invoices (client_id, appointment_id,"
+                                " consultation_id, amount) VALUES (%s,%s,%s,%s)",
+                                (owner_id, appt_id, cons_id, amount),
+                            )
+                            flash("Invoice issued.", "success")
+                            conn.close()
+                            return redirect(url_for("admin_invoices"))
             pcond = period_cond('i.issued_date', period)
             cur.execute("SELECT COUNT(*) AS c FROM invoices i"
                         f" WHERE i.status='unpaid' AND {pcond}")
@@ -1163,7 +1299,7 @@ def admin_invoices():
                             f" WHERE i.status=%s AND {pcond}", (st,))
                 vkpi[key] = cur.fetchone()["c"]
             sel = ("SELECT i.*, o.full_name AS owner_name FROM invoices i"
-                   " JOIN users o ON o.id=i.owner_id"
+                   " JOIN clients o ON o.id=i.client_id"
                    f" WHERE {pcond}")
             params = []
             if vstatus != "all":
@@ -1175,7 +1311,7 @@ def admin_invoices():
             sel += " ORDER BY i.issued_date DESC LIMIT 50"
             cur.execute(sel, params)
             invoices = cur.fetchall()
-            cur.execute("SELECT id, full_name FROM users WHERE role='owner'"
+            cur.execute("SELECT id, full_name FROM clients"
                         " ORDER BY full_name ASC")
             owners = cur.fetchall()
     except pymysql.MySQLError as e:
@@ -1203,7 +1339,7 @@ def admin_invoice_receipt(inv_id):
             cur.execute(
                 "SELECT i.*, o.full_name AS owner_name, o.phone,"
                 " p.name AS pet_name, a.appointment_date, a.reason"
-                " FROM invoices i JOIN users o ON o.id=i.owner_id"
+                " FROM invoices i JOIN clients o ON o.id=i.client_id"
                 " LEFT JOIN pets p ON p.id=(SELECT pet_id FROM appointments"
                 " WHERE id=i.appointment_id LIMIT 1)"
                 " LEFT JOIN appointments a ON a.id=i.appointment_id"
@@ -1247,7 +1383,7 @@ def admin_invoice_status(inv_id):
 
 # ---------------- Users (admin creates all accounts) ----------------
 
-USER_ROLES = ["admin", "vet", "staff", "owner"]
+USER_ROLES = ["admin", "staff"]
 
 
 @app.route("/admin/users", methods=["GET", "POST"])
@@ -1257,12 +1393,12 @@ def admin_users():
     if period not in PERIODS:
         period = "All Time"
     q = request.args.get("q", "").strip()
-    ukpi = {"total": 0, "admins": 0, "staff": 0, "vets": 0, "pending": 0}
+    ukpi = {"total": 0, "admins": 0, "staff": 0, "pending": 0}
     conn = db()
     if conn is None:
         flash("Database connection failed.", "danger")
         return render_template("admin/users.html", users=[], roles=USER_ROLES,
-                           ukpi={"total": 0, "admins": 0, "staff": 0, "vets": 0,
+                           ukpi={"total": 0, "admins": 0, "staff": 0,
                                  "pending": 0},
                            q="", astatus="all")
     try:
@@ -1280,8 +1416,8 @@ def admin_users():
                     errors.append("Username needs 3+ letters/numbers ( _ - allowed).")
                 if role not in USER_ROLES:
                     errors.append("Invalid role.")
-                if len(password) < 3:
-                    errors.append("Password is required (3+ chars).")
+                if len(password) < 8:
+                    errors.append("Password must be at least 8 characters.")
                 if not errors:
                     cur.execute("SELECT id FROM users WHERE username=%s LIMIT 1",
                                 (username,))
@@ -1325,7 +1461,7 @@ def admin_users():
                         f" WHERE {pcond}")
             ukpi["total"] = cur.fetchone()["c"]
             for key, role in (("admins", "admin"), ("staff", "staff"),
-                              ("vets", "vet"), ("pending", None)):
+                              ("pending", None)):
                 if role is None:
                     cur.execute("SELECT COUNT(*) AS c FROM users"
                                 f" WHERE status='pending' AND {pcond}")
@@ -1424,19 +1560,18 @@ def admin_clients():
         try:
             with conn.cursor() as cur:
                 pcond = period_cond('u.created_at', period)
-                cur.execute("SELECT COUNT(*) AS c FROM users u"
-                            f" WHERE u.role='owner' AND {pcond}")
+                cur.execute("SELECT COUNT(*) AS c FROM clients u"
+                            f" WHERE {pcond}")
                 ckpi["total"] = cur.fetchone()["c"]
-                cur.execute("SELECT COUNT(DISTINCT a.owner_id) AS c FROM appointments a"
-                            " JOIN users u ON u.id=a.owner_id"
-                            f" WHERE u.role='owner' AND {period_cond('a.created_at', period)}")
+                cur.execute("SELECT COUNT(DISTINCT a.client_id) AS c FROM appointments a"
+                            f" WHERE {period_cond('a.created_at', period)}")
                 ckpi["active"] = cur.fetchone()["c"]
                 ckpi["new"] = ckpi["total"]
                 base = ("SELECT u.id, u.full_name, u.phone,"
-                        " (SELECT COUNT(*) FROM pets p WHERE p.owner_id=u.id) AS pets,"
-                        " (SELECT COUNT(*) FROM appointments a WHERE a.owner_id=u.id) AS visits"
-                        f" FROM users u WHERE u.role='owner'"
-                        f" AND {pcond}")
+                        " (SELECT COUNT(*) FROM pets p WHERE p.client_id=u.id) AS pets,"
+                        " (SELECT COUNT(*) FROM appointments a WHERE a.client_id=u.id) AS visits"
+                        f" FROM clients u"
+                        f" WHERE {pcond}")
                 if q:
                     like = f"%{q}%"
                     cur.execute(base + " AND (u.full_name LIKE %s OR u.phone LIKE %s)"
@@ -1464,32 +1599,42 @@ def admin_client_detail(owner_id):
             if request.method == "POST":
                 name = request.form.get("full_name", "").strip()
                 phone = "".join(c for c in request.form.get("phone", "") if c.isdigit())
+                address = request.form.get("address", "").strip() or None
                 if not name or len(phone) < 7:
                     flash("Name and a valid phone are required.", "danger")
                 else:
-                    cur.execute("UPDATE users SET full_name=%s, phone=%s"
-                                " WHERE id=%s AND role='owner'", (name, phone, owner_id))
+                    try:
+                        cur.execute("UPDATE clients SET full_name=%s, phone=%s,"
+                                    " address=%s WHERE id=%s",
+                                    (name, phone, address, owner_id))
+                    except pymysql.IntegrityError:
+                        flash("That phone number is already registered.", "danger")
+                        conn.close()
+                        return redirect(url_for("admin_client_detail",
+                                                owner_id=owner_id))
                     flash("Client record updated.", "success")
                     conn.close()
                     return redirect(url_for("admin_client_detail", owner_id=owner_id))
-            cur.execute("SELECT id, full_name, phone, created_at FROM users"
-                        " WHERE id=%s AND role='owner' LIMIT 1", (owner_id,))
+            cur.execute("SELECT id, full_name, phone, address, created_at FROM clients"
+                        " WHERE id=%s LIMIT 1", (owner_id,))
             owner = cur.fetchone()
             if not owner:
                 flash("Client not found.", "danger")
                 conn.close()
                 return redirect(url_for("admin_clients"))
-            cur.execute("SELECT * FROM pets WHERE owner_id=%s ORDER BY name ASC",
+            cur.execute("SELECT * FROM pets WHERE client_id=%s ORDER BY name ASC",
                         (owner_id,))
             pets = cur.fetchall()
             cur.execute(
                 "SELECT a.id, a.appointment_date, a.appointment_time, a.reason, a.status,"
-                " p.name AS pet_name FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                " WHERE a.owner_id=%s ORDER BY a.appointment_date DESC LIMIT 20",
+                " p.name AS pet_name, v.full_name AS vet_name"
+                " FROM appointments a JOIN pets p ON p.id=a.pet_id"
+                " LEFT JOIN vets v ON v.id=a.vet_id"
+                " WHERE a.client_id=%s ORDER BY a.appointment_date DESC LIMIT 20",
                 (owner_id,))
             visits = cur.fetchall()
             cur.execute("SELECT id, amount, status, issued_date FROM invoices"
-                        " WHERE owner_id=%s ORDER BY issued_date DESC LIMIT 20", (owner_id,))
+                        " WHERE client_id=%s ORDER BY issued_date DESC LIMIT 20", (owner_id,))
             bills = cur.fetchall()
     except pymysql.MySQLError as e:
         print(f"Client detail failed: {e}")
@@ -1534,7 +1679,7 @@ def admin_pets():
                             f" WHERE p.species NOT IN ('Dog','Cat') AND {pcond}")
                 pkpi["others"] = cur.fetchone()["c"]
                 base = ("SELECT p.*, o.full_name AS owner_name, o.phone"
-                        " FROM pets p JOIN users o ON o.id=p.owner_id"
+                        " FROM pets p JOIN clients o ON o.id=p.client_id"
                         f" WHERE {pcond}")
                 params = []
                 if species != "All":
@@ -1570,12 +1715,14 @@ def admin_pet_edit(pet_id):
                 species = request.form.get("species", "").strip()
                 breed = request.form.get("breed", "").strip() or None
                 gender = request.form.get("gender", "").strip() or None
+                age_raw = request.form.get("age", "").strip()
                 try:
-                    age = int(request.form.get("age", "") or 0) or None
+                    age = int(age_raw) if age_raw else None
                 except ValueError:
                     age = None
+                weight_raw = request.form.get("weight", "").strip()
                 try:
-                    weight = float(request.form.get("weight", "") or 0) or None
+                    weight = float(weight_raw) if weight_raw else None
                 except ValueError:
                     weight = None
                 if not name or species not in SPECIES_CHOICES or \
@@ -1590,7 +1737,7 @@ def admin_pet_edit(pet_id):
                     conn.close()
                     return redirect(url_for("admin_pets", species=species))
             cur.execute("SELECT p.*, o.full_name AS owner_name FROM pets p"
-                        " JOIN users o ON o.id=p.owner_id WHERE p.id=%s LIMIT 1",
+                        " JOIN clients o ON o.id=p.client_id WHERE p.id=%s LIMIT 1",
                         (pet_id,))
             pet = cur.fetchone()
             if not pet:
@@ -1611,144 +1758,115 @@ def admin_pet_edit(pet_id):
                            gender_choices=GENDER_CHOICES)
 
 
-@app.route("/admin/walk-in", methods=["GET", "POST"])
+VET_STATUSES = ["active", "inactive"]
+
+
+@app.route("/admin/vets", methods=["GET", "POST"])
 @role_required("admin", "staff")
-def admin_walkin():
-    """Front-desk walk-in: name + phone + pet + service in one form.
-    Creates owner (phone dedupe) + pet + an APPROVED visit today, optionally queued.
-    GET also serves the walk-in history (source='walkin')."""
+def admin_vets():
     period = request.args.get("period", "All Time")
     if period not in PERIODS:
         period = "All Time"
     q = request.args.get("q", "").strip()
-    wstatus = request.args.get("wstatus", "all").strip()
-    if wstatus not in ("approved", "completed", "cancelled"):
-        wstatus = "all"
-    wkpi = {"total": 0, "today": 0}
+    vstatus = request.args.get("vstatus", "all").strip()
+    if vstatus not in ("all", "active", "inactive"):
+        vstatus = "all"
+    vkpi = {"total": 0, "active": 0, "consults": 0, "today": 0}
     rows = []
-    if request.method == "POST":
-        name = request.form.get("guest_name", "").strip()
-        phone = "".join(c for c in request.form.get("phone", "") if c.isdigit())
-        pet_name = request.form.get("pet_name", "").strip()
-        species = request.form.get("species", "").strip()
-        service = request.form.get("service", "").strip()
-        appt_time = request.form.get("appointment_time", "").strip() or "09:00"
-        to_queue = request.form.get("to_queue") == "1"
-        errors = []
-        if not name:
-            errors.append("Client name is required.")
-        if len(phone) < 7:
-            errors.append("A valid phone number is required.")
-        if not pet_name:
-            errors.append("Pet name is required.")
-        if species not in SPECIES_CHOICES:
-            errors.append("Please select a valid species.")
-        if service not in GUEST_SERVICES:
-            errors.append("Please select a valid service.")
-        if not appt_time:
-            errors.append("Time is required.")
-        for e in errors:
-            flash(e, "danger")
-        if not errors:
-            conn = db()
-            if conn is None:
-                flash("Database connection failed.", "danger")
-            else:
-                try:
-                    import secrets
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT id FROM users WHERE phone=%s AND role='owner'"
-                                    " LIMIT 1", (phone,))
-                        row = cur.fetchone()
-                        if row:
-                            owner_id = row["id"]
-                        else:
-                            username = f"guest{phone}"[:40]
-                            cur.execute("SELECT id FROM users WHERE username=%s LIMIT 1",
-                                        (username,))
-                            if cur.fetchone():
-                                username = f"{username}{secrets.randbelow(9000) + 1000}"[:50]
-                            temp_pw = bcrypt.hashpw(secrets.token_urlsafe(16).encode(),
-                                                    bcrypt.gensalt()).decode()
-                            cur.execute(
-                                "INSERT INTO users (full_name, username, email, password,"
-                                " role, phone) VALUES (%s,%s,%s,%s,'owner',%s)",
-                                (name, username, f"{username}@guest.local", temp_pw, phone))
-                            owner_id = cur.lastrowid
-                        cur.execute("INSERT INTO pets (owner_id, name, species)"
-                                    " VALUES (%s,%s,%s)", (owner_id, pet_name, species))
-                        pet_id = cur.lastrowid
-                        cur.execute(
-                            "INSERT INTO appointments (pet_id, owner_id, appointment_date,"
-                            " appointment_time, reason, source, status)"
-                            " VALUES (%s,%s,CURDATE(),%s,%s,'walkin','approved')",
-                            (pet_id, owner_id, appt_time, service))
-                        appt_id = cur.lastrowid
-                        if to_queue:
-                            cur.execute("SELECT COALESCE(MAX(queue_number),0)+1 AS nxt"
-                                        " FROM clinic_queue WHERE queue_date=CURDATE()")
-                            nxt = cur.fetchone()["nxt"]
-                            cur.execute(
-                                "INSERT INTO clinic_queue (appointment_id, pet_id, owner_id,"
-                                " queue_number, queue_date) VALUES (%s,%s,%s,%s,CURDATE())",
-                                (appt_id, pet_id, owner_id, nxt))
-                            flash(f"Walk-in registered as queue #{nxt}.", "success")
-                        else:
-                            flash(f"Walk-in registered (visit #{appt_id}, approved).",
-                                  "success")
-                        conn.close()
-                        return redirect(url_for("admin_walkin"))
-                except pymysql.MySQLError as e:
-                    print(f"Walk-in failed: {e}")
-                    flash("Walk-in failed. Please try again.", "danger")
-                finally:
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
     conn = db()
     if conn is None:
         flash("Database connection failed.", "danger")
-    else:
+        return render_template("admin/vets.html", rows=[], vkpi=vkpi, q=q,
+                               vstatus=vstatus, statuses=VET_STATUSES)
+    try:
+        with conn.cursor() as cur:
+            if request.method == "POST":
+                if session.get("role") != "admin":
+                    flash("Only Admin can add vets.", "danger")
+                    return redirect(url_for("admin_vets"))
+                full_name = request.form.get("full_name", "").strip()
+                specialty = request.form.get("specialty", "").strip() or None
+                phone = "".join(c for c in request.form.get("phone", "")
+                                if c.isdigit()) or None
+                if not full_name:
+                    flash("Vet name is required.", "danger")
+                elif phone is not None and len(phone) < 7:
+                    flash("Phone looks too short (7+ digits).", "danger")
+                else:
+                    cur.execute(
+                        "INSERT INTO vets (full_name, specialty, phone)"
+                        " VALUES (%s,%s,%s)", (full_name, specialty, phone))
+                    flash(f"Dr. {full_name} added to the directory.", "success")
+                    conn.close()
+                    return redirect(url_for("admin_vets"))
+            pcond = period_cond('created_at', period)
+            cur.execute("SELECT COUNT(*) AS c FROM vets"
+                        f" WHERE {pcond}")
+            vkpi["total"] = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) AS c FROM vets"
+                        f" WHERE is_active=1 AND {pcond}")
+            vkpi["active"] = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(*) AS c FROM consultations"
+                        f" WHERE {period_cond('consultation_date', period)}")
+            vkpi["consults"] = cur.fetchone()["c"]
+            cur.execute("SELECT COUNT(DISTINCT vet_id) AS c FROM appointments"
+                        " WHERE vet_id IS NOT NULL AND appointment_date=CURDATE()")
+            vkpi["today"] = cur.fetchone()["c"]
+            sel = ("SELECT v.*, (SELECT COUNT(*) FROM consultations c"
+                   " WHERE c.vet_id=v.id) AS consults FROM vets v"
+                   f" WHERE {pcond}")
+            params = []
+            if vstatus == "active":
+                sel += " AND v.is_active=1"
+            elif vstatus == "inactive":
+                sel += " AND v.is_active=0"
+            if q:
+                like = f"%{q}%"
+                sel += " AND (v.full_name LIKE %s OR v.specialty LIKE %s)"
+                params.extend([like, like])
+            sel += " ORDER BY v.is_active DESC, v.full_name ASC"
+            cur.execute(sel, params)
+            rows = cur.fetchall()
+    except pymysql.MySQLError as e:
+        print(f"Vets failed: {e}")
+        flash("Could not load vets.", "danger")
+        rows = []
+    finally:
         try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS c FROM appointments WHERE source='walkin'")
-                wkpi["total"] = cur.fetchone()["c"]
-                cur.execute("SELECT COUNT(*) AS c FROM appointments"
-                            " WHERE source='walkin' AND appointment_date=CURDATE()")
-                wkpi["today"] = cur.fetchone()["c"]
-                sel = ("SELECT a.id, a.appointment_date, a.appointment_time, a.reason,"
-                       " a.status, p.name AS pet_name, o.full_name AS owner_name, o.phone,"
-                       " (SELECT q.queue_number FROM clinic_queue q"
-                       " WHERE q.appointment_id=a.id LIMIT 1) AS queue_no"
-                       " FROM appointments a JOIN pets p ON p.id=a.pet_id"
-                       " JOIN users o ON o.id=a.owner_id"
-                       f" WHERE a.source='walkin' AND {period_cond('a.appointment_date', period)}")
-                params = []
-                if wstatus != "all":
-                    sel += " AND a.status=%s"
-                    params.append(wstatus)
-                if q:
-                    like = f"%{q}%"
-                    sel += (" AND (o.full_name LIKE %s OR o.phone LIKE %s"
-                            " OR p.name LIKE %s)")
-                    params.extend([like] * 3)
-                sel += " ORDER BY a.appointment_date DESC, a.appointment_time DESC LIMIT 100"
-                cur.execute(sel, params)
-                rows = cur.fetchall()
-        except pymysql.MySQLError as e:
-            print(f"Walk-in history failed: {e}")
-            flash("Could not load walk-in history.", "danger")
-        finally:
             conn.close()
-    return render_template("admin/walkin.html", today=date.today().isoformat(),
-                           species_choices=SPECIES_CHOICES, services=GUEST_SERVICES,
-                           rows=rows, wkpi=wkpi, q=q, wstatus=wstatus)
+        except Exception:
+            pass
+    return render_template("admin/vets.html", rows=rows, vkpi=vkpi, q=q,
+                           vstatus=vstatus, statuses=VET_STATUSES)
+
+
+@app.route("/admin/vets/<int:vet_id>/status", methods=["POST"])
+@role_required("admin")
+def admin_vet_status(vet_id):
+    new_status = request.form.get("status", "").strip()
+    if new_status not in VET_STATUSES:
+        flash("Invalid status.", "danger")
+    else:
+        conn = db()
+        if conn is None:
+            flash("Database connection failed.", "danger")
+        else:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE vets SET is_active=%s WHERE id=%s",
+                                (1 if new_status == "active" else 0, vet_id))
+                flash(f"Vet → {new_status}.", "success")
+            except pymysql.MySQLError as e:
+                print(f"Vet status failed: {e}")
+                flash("Could not update vet.", "danger")
+            finally:
+                conn.close()
+    return redirect(url_for("admin_vets"))
 
 
 if __name__ == "__main__":
-    import os
-
-    # PORT env override: another course project (IM 103) already uses :5000,
-    # so run this app with e.g. $env:PORT=5001; python app.py
-    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
+    # Port 5000 belongs to the IM 103 project; default to 5001.
+    # Debug is opt-in: $env:FLASK_DEBUG=1; $env:PORT=5001; python app.py
+    app.run(host="127.0.0.1",
+            port=int(os.environ.get("PORT", 5001)),
+            debug=os.environ.get("FLASK_DEBUG") == "1")

@@ -33,8 +33,7 @@
     <a class="tool-btn" title="Refresh List" href="{{ url_for('admin_clients', period=period, q=q) }}">
       <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
     <div class="bar-spacer"></div>
-    <a class="btn-add" href="{{ url_for('admin_walkin') }}">
-      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Walk-in</a>
+
   </div>
 
   <div class="card shadow-sm"><div class="card-body">
@@ -50,6 +49,6 @@
                 <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></a></td></tr>
       {% endfor %}</tbody>
     </table>
-    {% else %}<p class="text-muted mb-0">No clients found. Guest bookings and walk-ins appear here.</p>{% endif %}
+    {% else %}<p class="text-muted mb-0">No clients found. Guest bookings appear here.</p>{% endif %}
   </div></div>
 {% endblock %}
