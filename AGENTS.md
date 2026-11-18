@@ -14,22 +14,52 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
   `/pets`, `/pets/<id>/edit` (staff-editable)),
   vets (`/vets` (read: admin+staff; add/toggle: admin)),
   admin (`/dashboard`, `/appointments`, `/consultations`, `/consultations/new`
-  (attending-vet dropdown, backfills visit vet), `/consultations/<id>`,
-  `/users` (admin-only), `/users/<id>/delete`,
-  `/appointments/<id>/status` (admin-only), `/queue` (read: admin+staff; add: admin),
-  `/queue/<id>/status` (admin+staff), `/inventory` (read: admin+staff; add: admin),
-  `/inventory/<id>/edit|delete` (admin-only), `/invoices` (read: admin+staff;
-  issue: admin), `/invoices/<id>/status` (admin-only)).
+  (appointment + fixed service + attending-vet dropdown; bills the service fee),
+  `/consultations/<id>`,
+  `/users` (admin-only), `/users/<id>/delete` (admin + own password),
+  `/appointments/new` (Staff books walk-in/phone clients, auto client/pet,
+  optional queue ticket), `/appointments/<id>/status` (admin-only + own
+  password; approving a same-day booking auto-queues it once its time
+  arrives),
+  `/queue` (read: admin+staff; add: admin+staff; sweeps due approved bookings
+  on every load), `/queue/<id>/status` (admin+staff; **done redirects to the
+  prefilled consultation modal**), `/queue/<id>/delete` (admin-only + own
+  password; hard delete, disables auto-queue for that appointment),
+  `/services` (read: admin+staff; fee/duration/inclusions/availability edit:
+  admin + own password; services are fixed — no create/delete),
+  `/invoices` (read: admin+staff; issue: admin), `/invoices/<id>/status`
+  (admin-only + own password),
+  `/users/<id>/status` (admin-only + own password), `/vets/<id>/status`
+  (admin-only + own password),
+  `/settings` + `/settings/profile|photo` (own account, admin+staff) +
+  `/settings/vets` (vet profiles, admin-only), `/guide` (read-only
+  plain-language English guide, Admin+Staff, no DB),
+  `/reports` (read-only reports hub, Admin+Staff) + `/reports/<kind>`
+  registers (appointments/queue/consultations/invoices/clients/pets/vets/
+  revenue; KPI row → action bar with print → table → pager) +
+  `/reports/lookup` (record lookup that redirects to the owning ledger)).
+  Inventory is retired from the UI (routes/templates/nav/KPI removed); the
+  `inventory` table stays in MySQL only so legacy prescription rows still
+  resolve their medicine name.
   Roles: `admin` (full), `staff` (operate + view, no approve/delete/users).
   Logins live in `users`; `clients` + `vets` are record tables (no login surface).
+  Uploaded photos live in `static/uploads/avatars/` and `static/uploads/vets/`
+  and are served straight from Flask's static folder.
 - `config.py` — `get_connection()` (DictCursor, autocommit). Same XAMPP creds
   (`localhost / petclinic / root / ""`).
-- `database/setup_db.py` — source of truth for schema (10 tables) + Admin/Staff/
-  Duty-Vet seeds (bcrypt at runtime). Guarded by `if __name__ == "__main__"`.
+- `database/setup_db.py` — source of truth for schema (11 tables, incl. the
+  fixed `services` price list) + Admin/Staff/
+  Duty-Vet seeds (bcrypt at runtime). Idempotent `upgrades` list adds later
+  columns (`users.avatar`, vet photo/email/license/bio, prescription
+  `medicine_name`, `consultations.service_id`) on existing databases.
+  Guarded by `if __name__ == "__main__"`.
   `database/migrate_clients_vets.py` — one-shot live upgrade (owners→clients,
   vet FKs, role ENUM). Don't change schema without updating it + CHANGELOG.
 - `templates/landing.html` + `static/css/landing.css` — EAVS Telly pattern, vet palette;
   login lives ONLY in the `#loginCurtain` card (no standalone login page).
+  "What we offer" cards are `button.amenity` and open fee/duration/inclusion
+  panels in `#svcDock` through `static/js/landing-services.js` (multi-open,
+  minimize-to-header, × and Escape close); vet-directory cards stay `div.amenity`.
 - `templates/` + `static/` — Jinja2 + Bootstrap 5 CDN (until CPSC admin port drops it).
 
 ## Coding Rules
@@ -44,15 +74,16 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
 4. Re-validate ownership server-side (e.g. pet belongs to `session user_id`).
 5. Flash messages for errors/success; login failures use the `?auth=failed` popup flow.
 6. Standard port is **5001** (`$env:PORT=5001`); port 5000 belongs to the IM 103 project.
-7. Dashboard header law (CPSC pattern): the dashboard header holds the page label,
-   a live clock beneath it, period filter, refresh, bell, and the logged-in user
-   block (first name + role pill + initial avatar) at the far right.
-   List-page headers are slim (label, clock, bell, user) — their filter +
-   refresh live in the action bar's combined funnel panel (Period + page Status).
-   Implementation: shared `_page_header.html` include (`full_header` flag only on
-   the dashboard) + `inject_bell` context processor. Never hand-roll a header.
-   The period filter drives every list page through `period_cond()`; detail/form
-   pages use the slim header (`show_filter = False`).
+7. Header law: every page header is slim — label, live clock, bell, and the
+   logged-in user block (surname-first name + role pill + avatar) at the far
+   right. **No period filter or refresh in any header**, including the dashboard.
+   List-page period/status filters live in the action-bar funnel panel
+   (`period_cond()`); on the dashboard each analytics card owns its own funnel
+   (`bk`/`qp`/`rev`/`svc`/`rec` query params) so cards filter independently.
+   Implementation: shared `_page_header.html` include + `inject_bell` context
+   processor. Never hand-roll a header. Person names render through the
+   `person_name` Jinja filter ("Juan Dela Cruz" → "Dela Cruz, Juan"); usernames
+   and role pills keep their raw casing.
 8. Icons are SVG sprite symbols only (`_sprite.html`: `i-*` actions, `k-*` KPIs,
    CPSC path geometry) — never emoji in app UI.
 9. Sidebar law: logo block, grouped buttons with trailing label lines, dividers
@@ -60,15 +91,21 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
    Bump `?v=` on static links whenever CSS/JS changes (kills stale-cache ghosts).
 10. List-page law (CPSC control pattern, dashboard excluded): header → KPI row
     (period-aware counts, cards link-filter the ledger) → action bar
-    (search + refresh + funnel side-by-side; funnel panel holds Period + page
-    Status categories; add-record button only where records originate) →
-    roomy badge table (`.table-card-fill` min-height) with sprite icon buttons
-    (`icon-view/edit/approve/reject/del`; Admin-only actions hidden for Staff).
-    Row mutations stay server-guarded regardless of hidden buttons.
+    search + refresh + funnel grouped on the left, `.bar-spacer`, then the
+    add-record button pinned right (only where records originate); funnel panel
+    holds Period + page Status categories →
+    roomy badge table (`.table-card-fill` min-height), **all cell text and
+    action buttons left-aligned** (`th`, `td`, `.action-cell`), with sprite icon
+    buttons (`icon-view/edit/approve/reject/del`; Admin-only actions hidden for
+    Staff). Row mutations stay server-guarded regardless of hidden buttons.
 11. Modal law (CPSC pattern): hand-rolled `vet-overlay` shells only (droplet
     entrance, `fx21` floating fields, section cards, Cancel + Save footer,
-    locked backdrop, body-level overlay). Never use native `confirm()` — route
-    through the shared decision shell. Never add X buttons.
+    locked backdrop, body-level overlay). Form-wrapped modals must keep the
+    `.vet-modal-box > form` column-flex rule in `vet-modals.css` — without it
+    the body never scrolls and `overflow:hidden` clips the footer. Never use
+    native `confirm()` — route through the shared decision shell. Never add
+    X buttons. Save buttons disable while submitting (`Saving…`) and re-enable
+    on `pageshow`.
 12. CSRF law: every `method="POST"` form starts with
     `<input type="hidden" name="_csrf" value="{{ csrf_token() }}">`. New POST
     routes are covered automatically by the `before_request` guard; never
@@ -76,8 +113,39 @@ Read `SESSION.md` at the start of every new session, then update it at the end.
 13. Config law: DB credentials, `SECRET_KEY`, cookie `Secure`, `PORT`, and
     debug come from environment variables (`PETCLINIC_*`, `PORT`,
     `FLASK_DEBUG`). Keep dev fallbacks in `config.py` only; never hardcode
-    secrets in routes. Multi-write flows (booking, consultation, stock,
-    queue) must use the `tx()` helper.
+    secrets in routes. Multi-write flows (booking, consultation, queue) must
+    use the `tx()` helper.
+14. Upload law: photos go through `_store_image()` only — real format from
+    magic bytes (PNG/JPEG/WEBP), 3 MB cap, generated filename
+    (`<prefix>_<hex>.<ext>`), basename-only deletes. Never trust the client
+    filename or extension. Every upload form is `multipart/form-data` and
+    still carries `_csrf`.
+15. Date display law: never print raw DB dates. Use the `pretty_date`
+    ("August 30, 2026") or `pretty_when` ("August 30, 2026 | 12:00") Jinja
+    filters; for split columns call
+    `a.appointment_date|pretty_when(a.appointment_time)`. Times are 24-hour
+    `HH:MM`.
+16. Password-gate law (CPSC pattern): every admin-only write that changes
+    money, access, or another person's record must start with
+    `if not verify_admin_password(): ...` and leave the record untouched on
+    failure. Current gate: approve/reject appointment, invoice paid/cancel,
+    user approve/reject/delete, vet activate/deactivate, queue ticket delete,
+    service fee/inclusion edit.
+    The decision modal asks for the password only when the form carries
+    `data-confirm-password="required"`; routine staff actions (queue
+    serve/done/skip, consultations, client/pet edits, own profile) must stay
+    password-free. New gated routes need no extra CSRF work (covered by the
+    `before_request` guard).
+17. Money law: the `services` table is the single source of truth for fixed
+    service prices and inclusions; services are seeded and fixed — never add
+    a create/delete service form. The consultation POST accepts only
+    `service_id` and derives the invoice amount from `services.fee`
+    server-side; never accept a client-posted amount. Editing a fee applies
+    to future consultations only (issued invoices keep their amount).
+    Landing/booking/appointment dropdowns read the active service list, and
+    marking a queue entry done must hand off to
+    `/admin/consultations?log=<appointment_id>` with the consultation modal
+    prefilled.
 
 ## Session Protocol
 1. Read `SESSION.md` (last-done / current-state / next-steps / blockers).

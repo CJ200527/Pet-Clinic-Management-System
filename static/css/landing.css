@@ -54,6 +54,29 @@ h1, h2, h3, .serif { font-family: Georgia, 'Times New Roman', serif; }
 .svc-card img { height: 220px; width: 100%; object-fit: cover; }
 .amenity { border: 1px solid var(--line); border-radius: .7rem; padding: 1.1rem; text-align: center; background: #fff; }
 .amenity .ic { font-size: 1.6rem; }
+/* Only the "What we offer" cards are buttons; vet cards keep the plain look. */
+button.amenity { display: block; width: 100%; height: 100%; font: inherit; color: inherit;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
+button.amenity:hover { border-color: var(--vet); transform: translateY(-3px);
+  box-shadow: 0 12px 26px rgba(15, 61, 58, .12); }
+button.amenity:focus-visible { outline: none; border-color: var(--vet);
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, .22), 0 12px 26px rgba(15, 61, 58, .12); }
+button.amenity.is-open { border-color: var(--vet); background: #f2fbf9; }
+button.amenity .amenity-more { display: block; margin-top: .35rem; font-size: .68rem;
+  font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--vet); opacity: 0; transition: opacity .18s ease; }
+button.amenity:hover .amenity-more, button.amenity:focus-visible .amenity-more,
+button.amenity.is-open .amenity-more { opacity: 1; }
+.services-hint { margin: .9rem 0 0; font-size: .82rem; color: var(--muted); }
+
+/* SVG sprite usage on the public site (no emoji in UI) */
+.line-ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: .35rem; }
+.vet-nav .navbar-brand .line-ic { width: 26px; height: 26px; color: var(--vet); }
+.amenity .ic { color: var(--vet); display: flex; justify-content: center; margin-bottom: .4rem; }
+.amenity .ic svg { width: 30px; height: 30px; stroke: currentColor; }
+.vet-footer .line-ic { color: var(--accent); }
+#loginCurtain .eyebrow .line-ic { color: var(--vet2); }
 
 /* Spec table + stats */
 .spec-table { font-size: .9rem; width: 100%; }
@@ -103,3 +126,67 @@ body.curtain-lock { overflow: hidden; }
   width: min(360px, calc(100% - 2rem)); text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,.4); }
 #authPopup .popup-ic { font-size: 2.2rem; }
+
+/* Service details comparison dock (landing services) */
+.svc-dock { position: fixed; right: 1rem; bottom: 1rem; z-index: 1500;
+  display: flex; flex-direction: column; align-items: flex-end; gap: .6rem;
+  width: min(340px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem); overflow-y: auto; padding: .15rem;
+  scrollbar-width: thin; }
+.svc-pop { flex: none; width: 100%; background: #fff; border: 1px solid var(--line);
+  border-radius: .8rem; box-shadow: 0 18px 42px rgba(15, 61, 58, .2);
+  overflow: hidden; animation: svcPopIn .2s ease both; }
+.svc-pop.is-closing { animation: svcPopOut .17s ease both; }
+.svc-pop.svc-pop-flash { animation: svcPopFlash .55s ease; }
+@keyframes svcPopIn { from { opacity: 0; transform: translateY(10px) scale(.98); }
+  to { opacity: 1; transform: none; } }
+@keyframes svcPopOut { from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes svcPopFlash { 0%, 100% { box-shadow: 0 18px 42px rgba(15, 61, 58, .2); }
+  35% { box-shadow: 0 0 0 3px rgba(20, 184, 166, .4), 0 18px 42px rgba(15, 61, 58, .2); } }
+
+.svc-pop-head { display: flex; align-items: center; gap: .55rem;
+  padding: .55rem .65rem; background: #f2fbf9; border-bottom: 1px solid var(--line);
+  cursor: pointer; }
+.svc-pop.is-min .svc-pop-head { border-bottom: 0; }
+.svc-pop-ic { display: inline-flex; color: var(--vet); flex: none; }
+.svc-pop-ic .ic { width: 18px; height: 18px; }
+.svc-pop-title { flex: 1; min-width: 0; line-height: 1.2; }
+.svc-pop-title strong { display: block; font-size: .9rem; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svc-pop-title small { display: block; font-size: .7rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svc-pop-btn { flex: none; width: 26px; height: 26px; display: grid;
+  place-items: center; border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background .15s ease, color .15s ease; }
+.svc-pop-btn:hover { background: rgba(15, 118, 110, .1); color: var(--vet); }
+.svc-pop-btn:focus-visible { outline: none; border-color: var(--vet);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, .2); }
+.svc-pop-btn .ic { width: 14px; height: 14px; }
+.svc-pop-close:hover { background: rgba(198, 40, 40, .1); color: #c62828; }
+
+.svc-pop-body { padding: .15rem .9rem .9rem; }
+.svc-pop.is-min .svc-pop-body { display: none; }
+.svc-pop-row { display: flex; align-items: baseline; justify-content: space-between;
+  gap: .8rem; padding: .42rem 0; border-bottom: 1px dashed var(--line);
+  font-size: .86rem; }
+.svc-pop-row span { color: var(--muted); }
+.svc-pop-row strong { color: var(--ink); text-align: right; }
+.svc-pop-row .svc-pop-fee { color: var(--vet); font-size: 1.05rem; }
+.svc-pop-inc-label { margin: .65rem 0 .2rem; font-size: .68rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.svc-pop-inc { margin: 0; font-size: .84rem; line-height: 1.5; color: #44515e; }
+.svc-pop-inc.is-muted { color: var(--muted); font-style: italic; }
+.svc-pop-note { margin: .6rem 0 0; font-size: .76rem; color: #a15c00; }
+
+@media (max-width: 575px) {
+  .svc-dock { left: .75rem; right: .75rem; width: auto;
+    max-height: 62vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amenity, .amenity-more, .svc-pop, .svc-pop.svc-pop-flash { animation: none !important;
+    transition: none !important; }
+  .amenity:hover { transform: none; }
+}

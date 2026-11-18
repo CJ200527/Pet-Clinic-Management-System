@@ -3,14 +3,8 @@
 {% block content %}
 {% set page_title = "Appointments" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <!-- KPI row: cards link-filter the ledger -->
-  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+<!-- KPI row: cards link-filter the ledger -->
+  <div class="kpi-grid kpi-grid-5">
     <a class="kpi-card" href="{{ url_for('admin_appointments', status='all', period=period) }}">
       <div class="kpi-main">
         <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg></span>
@@ -32,10 +26,17 @@
       </div>
       <div class="kpi-sub">Confirmed visits</div>
     </a>
+    <a class="kpi-card" href="{{ url_for('admin_appointments', status='completed', period=period) }}">
+      <div class="kpi-main">
+        <span class="kpi-badge badge-teal"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
+        <div><div class="kpi-title">Completed</div><div class="kpi-value">{{ akpi.completed }}</div></div>
+      </div>
+      <div class="kpi-sub">Visits served</div>
+    </a>
     <a class="kpi-card" href="{{ url_for('admin_appointments', status='cancelled', period=period) }}">
       <div class="kpi-main">
         <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></span>
-        <div><div class="kpi-title">Rejected</div><div class="kpi-value">{{ akpi.rejected }}</div></div>
+        <div><div class="kpi-title">Cancelled</div><div class="kpi-value">{{ akpi.cancelled }}</div></div>
       </div>
       <div class="kpi-sub">Declined bookings</div>
     </a>
@@ -82,16 +83,19 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
+    <button class="btn-add" onclick="openVetModal('newApptModal');return false;">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>New Appointment</button>
   </div>
 
   <div class="card shadow-sm table-card-fill"><div class="card-body">
     {% if rows %}
-    <div class="table-responsive-sm">
+    <div class="table-responsive-sm table-scroll">
     <table class="table table-sm align-middle">
         <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Vet</th><th>Reason</th><th>Status</th>
-          <th class="text-end">Actions</th></tr></thead>
+          <th>Actions</th></tr></thead>
       <tbody>{% for a in rows %}
-        <tr><td>{{ a.id }}</td><td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
+        <tr><td>{{ a.id }}</td><td>{{ a.appointment_date|pretty_when(a.appointment_time) }}</td>
             <td>{{ a.pet_name }} / {{ a.owner_name }}{% if a.phone %}<br><small class="text-muted">{{ a.phone }}</small>{% endif %}</td>
             <td>{{ a.vet_name or 'TBD' }}</td><td>{{ a.reason }}</td>
             <td><span class="badge badge-{{ a.status }}">{{ a.status }}</span></td>
@@ -103,7 +107,8 @@
               <form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Approve booking"
-                    data-confirm-msg="Approve booking #{{ a.id }} for {{ a.pet_name }}?">
+                    data-confirm-msg="Approve booking #{{ a.id }} for {{ a.pet_name }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="approved">
                 <button class="icon-act icon-approve" title="Approve">
@@ -112,7 +117,8 @@
               <form method="POST" action="{{ url_for('admin_appointment_status', appt_id=a.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Reject booking"
-                    data-confirm-msg="Reject booking #{{ a.id }} for {{ a.pet_name }}?">
+                    data-confirm-msg="Reject booking #{{ a.id }} for {{ a.pet_name }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="cancelled">
                 <button class="icon-act icon-reject" title="Reject">
@@ -126,12 +132,14 @@
     {% else %}<p class="text-muted mb-0">No appointments found.</p>{% endif %}
   </div></div>
 
+  {% include "admin/_pager.html" %}
+
   <!-- View shells -->
   {% for a in rows %}
   <div class="vet-overlay" id="viewAppt{{ a.id }}" aria-hidden="true">
     <div class="vet-modal-box">
       <div class="vet-modal-header"><h3>Booking #{{ a.id }}</h3>
-        <p>{{ a.appointment_date }} at {{ a.appointment_time }} ·
+        <p>{{ a.appointment_date|pretty_when(a.appointment_time) }} ·
            <span class="badge badge-{{ a.status }}">{{ a.status }}</span></p></div>
       <div class="vet-modal-body">
         <table class="view-rows">
@@ -147,4 +155,177 @@
     </div>
   </div>
   {% endfor %}
+
+  <!-- New appointment (staff books walk-in / phone clients) -->
+  <div class="vet-overlay" id="newApptModal" aria-hidden="true">
+    <div class="vet-modal-box">
+      <form method="POST" action="{{ url_for('admin_appointment_new') }}" autocomplete="off">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="vet-modal-header"><h3>New Appointment</h3>
+          <p>Book a walk-in or phone client. It is saved as <strong>approved</strong>.</p></div>
+        <div class="vet-modal-body">
+          <div class="form-section-card"><h4>Client</h4>
+            <div class="mode-row">
+              <label><input type="radio" name="client_mode" value="existing" checked> Existing client</label>
+              <label><input type="radio" name="client_mode" value="new"> New client</label>
+            </div>
+            <div id="naExisting">
+              <div class="fx21-field">
+                <select name="client_id" id="naClient" class="effect-21">
+                  <option value="">— choose a client —</option>
+                  {% for c in clients %}
+                  <option value="{{ c.id }}">{{ c.full_name }}{% if c.phone %} · {{ c.phone }}{% endif %}</option>
+                  {% endfor %}
+                </select><label>Client</label></div>
+            </div>
+            <div id="naNew" hidden>
+              <div class="fx21-field">
+                <input type="text" name="owner_name" class="effect-21" placeholder=" ">
+                <label>Owner full name</label></div>
+              <div class="fx21-field">
+                <input type="text" name="phone" class="effect-21" placeholder=" "
+                       inputmode="numeric" maxlength="11">
+                <label>Phone (09XXXXXXXXX)</label></div>
+            </div>
+          </div>
+          <div class="form-section-card"><h4>Patient</h4>
+            <div id="naPetPick">
+              <div class="fx21-field">
+                <select name="pet_id" id="naPet" class="effect-21">
+                  <option value="">— choose a pet —</option>
+                  {% for pt in pets %}
+                  <option value="{{ pt.id }}" data-client="{{ pt.client_id }}">{{ pt.name }}</option>
+                  {% endfor %}
+                  <option value="__new">＋ New pet</option>
+                </select><label>Pet</label></div>
+            </div>
+            <div id="naNewPet" hidden>
+              <div class="fx21-field">
+                <input type="text" name="pet_name" class="effect-21" placeholder=" ">
+                <label>Pet name</label></div>
+              <div class="fx21-field">
+                <select name="species" class="effect-21">
+                  {% for s in species_choices %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select><label>Species</label></div>
+            </div>
+          </div>
+          <div class="form-section-card"><h4>Visit</h4>
+            <div class="fx21-field">
+              <select name="service" class="effect-21">
+                {% if services %}
+                  {% for s in services %}
+                  <option value="{{ s.name }}">{{ s.name }} — ₱{{ '%.2f'|format(s.fee) }}</option>
+                  {% endfor %}
+                {% else %}
+                  {% for s in default_services %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                {% endif %}
+              </select><label>Service</label></div>
+            <div class="fx21-field">
+              <input type="date" name="appointment_date" id="naDate" class="effect-21" required>
+              <label>Date</label></div>
+            <div class="fx21-field">
+              <input type="time" name="appointment_time" id="naTime" class="effect-21" required>
+              <label>Time</label></div>
+            <div class="fx21-field">
+              <select name="vet_id" class="effect-21">
+                <option value="">— assign later —</option>
+                {% for v in vets %}<option value="{{ v.id }}">Dr. {{ v.full_name }}</option>{% endfor %}
+              </select><label>Vet (optional)</label></div>
+            <div class="fx21-field">
+              <textarea name="notes" class="effect-21" rows="2" placeholder=" "></textarea>
+              <label>Notes (optional)</label></div>
+            <label class="queue-now"><input type="checkbox" name="add_to_queue" value="1">
+              Add to today’s queue now</label>
+          </div>
+        </div>
+        <div class="vet-modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeVetModal('newApptModal')">Cancel</button>
+          <button type="submit" class="btn-modal-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var modal = document.getElementById('newApptModal');
+  if (!modal) return;
+  var modes = modal.querySelectorAll('input[name="client_mode"]');
+  var exBox = document.getElementById('naExisting');
+  var newBox = document.getElementById('naNew');
+  var clientSel = document.getElementById('naClient');
+  var petSel = document.getElementById('naPet');
+  var petWrap = document.getElementById('naPetPick');
+  var newPet = document.getElementById('naNewPet');
+  var petName = modal.querySelector('input[name="pet_name"]');
+  var ownerName = modal.querySelector('input[name="owner_name"]');
+  var ownerPhone = modal.querySelector('input[name="phone"]');
+
+  function setNewPet(on) {
+    newPet.hidden = !on;
+    if (petName) {
+      petName.disabled = !on;
+      petName.required = on;
+    }
+  }
+  function syncMode() {
+    var isNew = modal.querySelector('input[name="client_mode"]:checked').value === 'new';
+    exBox.hidden = isNew;
+    newBox.hidden = !isNew;
+    petWrap.hidden = isNew;
+    clientSel.disabled = isNew;
+    clientSel.required = !isNew;
+    if (ownerName) ownerName.required = isNew;
+    if (ownerPhone) ownerPhone.required = isNew;
+    if (isNew) {
+      petSel.disabled = true;
+      petSel.required = false;
+      petSel.value = '';
+      setNewPet(true);
+    } else {
+      syncPets();
+    }
+  }
+  function syncPets() {
+    var cid = clientSel.value;
+    var hasClient = !!cid;
+    Array.prototype.forEach.call(petSel.options, function (o) {
+      if (!o.dataset.client) return;
+      o.hidden = !hasClient || o.dataset.client !== cid;
+    });
+    var newOpt = petSel.querySelector('option[value="__new"]');
+    if (newOpt) newOpt.hidden = !hasClient;
+    if (!hasClient) {
+      petSel.value = '';
+    } else if (petSel.value && petSel.value !== '__new') {
+      var cur = petSel.options[petSel.selectedIndex];
+      if (cur && cur.dataset.client && cur.dataset.client !== cid) petSel.value = '';
+    }
+    petSel.disabled = !hasClient;
+    petSel.required = hasClient;
+    setNewPet(petSel.value === '__new');
+  }
+  modes.forEach(function (r) { r.addEventListener('change', syncMode); });
+  clientSel.addEventListener('change', syncPets);
+  petSel.addEventListener('change', function () {
+    setNewPet(petSel.value === '__new');
+  });
+  // Sensible defaults the first time the modal opens.
+  var d = document.getElementById('naDate');
+  var t = document.getElementById('naTime');
+  if (d && !d.value) {
+    var now = new Date();
+    d.value = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+  }
+  if (t && !t.value) {
+    var n = new Date();
+    n.setMinutes(n.getMinutes() + (30 - n.getMinutes() % 30 || 30));
+    t.value = String(n.getHours()).padStart(2, '0') + ':' +
+      String(n.getMinutes()).padStart(2, '0');
+  }
+  syncMode();
+})();
+</script>
 {% endblock %}

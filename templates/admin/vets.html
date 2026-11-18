@@ -3,13 +3,7 @@
 {% block content %}
 {% set page_title = "Vets" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
     <a class="kpi-card" href="{{ url_for('admin_vets', period=period, q=q, vstatus='all') }}">
       <div class="kpi-main">
       <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
@@ -43,7 +37,6 @@
     <a class="tool-btn" title="Refresh List"
        href="{{ url_for('admin_vets', period=period, q=q, vstatus=vstatus) }}">
       <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
-    <div class="bar-spacer"></div>
     <div class="filter-wrap">
       <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
         <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
@@ -73,6 +66,7 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
     {% if session.role == 'admin' %}
     <button class="btn-add" onclick="openVetModal('addVetModal');return false;">
       <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add Vet</button>
@@ -80,14 +74,19 @@
   </div>
 
   <div class="card shadow-sm table-card-fill"><div class="card-body">
-    <h5>Veterinarians ({{ rows|length }})</h5>
+    <h5>Veterinarians{% if pager %} ({{ pager.total }}){% endif %}</h5>
     {% if rows %}
-    <div class="table-responsive-sm">
+    <div class="table-responsive-sm table-scroll">
     <table class="table table-sm align-middle">
       <thead><tr><th>Name</th><th>Specialty</th><th>Phone</th><th>Status</th><th>Consults</th>
-        <th class="text-end">Actions</th></tr></thead>
+        <th>Actions</th></tr></thead>
       <tbody>{% for v in rows %}
-        <tr><td><strong>Dr. {{ v.full_name }}</strong></td>
+        <tr><td><div class="vet-name-cell">
+            <span class="vet-thumb vet-thumb-sm">
+              {% if v.photo %}<img src="{{ vet_photo_url(v.photo) }}" alt="Dr. {{ v.full_name }}">
+              {% else %}{{ (v.full_name or '?')[:1] }}{% endif %}
+            </span>
+            <strong>Dr. {{ v.full_name }}</strong></div></td>
             <td>{{ v.specialty or '—' }}</td><td>{{ v.phone or '—' }}</td>
             <td>{% if v.is_active %}<span class="badge bg-success">active</span>
                 {% else %}<span class="badge bg-secondary">inactive</span>{% endif %}</td>
@@ -98,7 +97,8 @@
               <form method="POST" action="{{ url_for('admin_vet_status', vet_id=v.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Deactivate vet"
-                    data-confirm-msg="Deactivate Dr. {{ v.full_name }}? They leave the assignable list.">
+                    data-confirm-msg="Deactivate Dr. {{ v.full_name }}? They leave the assignable list."
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="inactive">
                 <button class="icon-act icon-reject" title="Deactivate">
@@ -108,7 +108,8 @@
               <form method="POST" action="{{ url_for('admin_vet_status', vet_id=v.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Activate vet"
-                    data-confirm-msg="Activate Dr. {{ v.full_name }}?">
+                    data-confirm-msg="Activate Dr. {{ v.full_name }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="active">
                 <button class="icon-act icon-approve" title="Activate">
@@ -122,6 +123,8 @@
     </div>
     {% else %}<p class="text-muted mb-0">No vets in the directory yet.</p>{% endif %}
   </div></div>
+
+  {% include "admin/_pager.html" %}
 
   {% if session.role == 'admin' %}
   <!-- Add modal (CPSC shell) -->

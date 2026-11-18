@@ -3,13 +3,7 @@
 {% block content %}
 {% set page_title = "Users" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="kpi-card"><div class="kpi-main">
       <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg></span>
       <div><div class="kpi-title">Total Users</div><div class="kpi-value">{{ ukpi.total }}</div></div>
@@ -39,7 +33,6 @@
     <a class="tool-btn" title="Refresh List"
        href="{{ url_for('admin_users', period=period, q=q, astatus=astatus) }}">
       <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
-    <div class="bar-spacer"></div>
     <div class="filter-wrap">
       <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
         <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
@@ -69,19 +62,20 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
     <button class="btn-add" onclick="openVetModal('createUserModal');return false;">
       <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Create User</button>
   </div>
 
   <div class="card shadow-sm table-card-fill"><div class="card-body">
-    <h5>Accounts ({{ users|length }})</h5>
+    <h5>Accounts{% if pager %} ({{ pager.total }}){% endif %}</h5>
     {% if users %}
-    <div class="table-responsive-sm">
+    <div class="table-responsive-sm table-scroll">
     <table class="table table-sm align-middle">
       <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th>
-        <th class="text-end">Actions</th></tr></thead>
+        <th>Actions</th></tr></thead>
       <tbody>{% for u in users %}
-        <tr><td><strong>{{ u.username }}</strong></td><td>{{ u.full_name }}</td>
+        <tr><td><strong>{{ u.username }}</strong></td><td>{{ u.full_name|person_name }}</td>
             <td><span class="badge bg-secondary">{{ u.role }}</span></td>
             <td><span class="badge badge-{{ u.status }}">{{ u.status }}</span></td>
             <td class="action-cell">
@@ -89,7 +83,8 @@
               <form method="POST" action="{{ url_for('admin_user_status', user_id=u.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Approve account"
-                    data-confirm-msg="Approve {{ u.username }}?">
+                    data-confirm-msg="Approve {{ u.username }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="approved">
                 <button class="icon-act icon-approve" title="Approve">
@@ -98,7 +93,8 @@
               <form method="POST" action="{{ url_for('admin_user_status', user_id=u.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Reject account"
-                    data-confirm-msg="Reject {{ u.username }}?">
+                    data-confirm-msg="Reject {{ u.username }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="rejected">
                 <button class="icon-act icon-reject" title="Reject">
@@ -109,7 +105,8 @@
               <form method="POST" action="{{ url_for('admin_user_delete', user_id=u.id) }}"
                     class="d-inline needs-confirm"
                     data-confirm-title="Delete account"
-                    data-confirm-msg="Delete {{ u.username }}?">
+                    data-confirm-msg="Delete {{ u.username }}?"
+                    data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <button class="icon-act icon-del" title="Delete">
                   <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
@@ -121,6 +118,8 @@
     </div>
     {% else %}<p class="text-muted mb-0">No accounts found.</p>{% endif %}
   </div></div>
+
+  {% include "admin/_pager.html" %}
 
   <!-- Create modal (CPSC shell) -->
   <div class="vet-overlay" id="createUserModal" aria-hidden="true">

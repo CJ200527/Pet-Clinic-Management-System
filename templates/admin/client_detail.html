@@ -4,18 +4,13 @@
 {% set page_title = "Client Record" %}
 {% set show_filter = False %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-  <div class="row g-3">
+<div class="row g-3">
     <div class="col-md-4">
       <div class="card shadow-sm"><div class="card-body">
         <h5>{{ owner.full_name }}</h5>
         <p class="text-muted mb-1">{{ owner.phone or 'No phone' }}</p>
         {% if owner.address %}<p class="mb-1"><small>{{ owner.address }}</small></p>{% endif %}
-        <p class="text-muted"><small>Client since {{ owner.created_at }}</small></p>
+        <p class="text-muted"><small>Client since {{ owner.created_at|pretty_date }}</small></p>
         <hr>
         <h6>Correct Record</h6>
         <form method="POST" action="{{ url_for('admin_client_detail', owner_id=owner.id) }}">
@@ -50,7 +45,7 @@
         <table class="table table-sm align-middle mb-0">
           <thead><tr><th>#</th><th>Date</th><th>Pet</th><th>Service</th><th>Vet</th><th>Status</th></tr></thead>
           <tbody>{% for v in visits %}
-            <tr><td>{{ v.id }}</td><td>{{ v.appointment_date }} {{ v.appointment_time }}</td>
+            <tr><td>{{ v.id }}</td><td>{{ v.appointment_date|pretty_when(v.appointment_time) }}</td>
                 <td>{{ v.pet_name }}</td><td>{{ v.reason }}</td>
                 <td>{{ v.vet_name or 'TBD' }}</td>
                 <td><span class="badge bg-secondary">{{ v.status }}</span></td></tr>
@@ -66,7 +61,7 @@
           <tbody>{% for b in bills %}
             <tr><td>{{ b.id }}</td><td>₱{{ b.amount }}</td>
                 <td><span class="badge bg-{{ 'success' if b.status == 'paid' else 'warning' }}">{{ b.status }}</span></td>
-                <td><small>{{ b.issued_date }}</small></td></tr>
+                <td><small>{{ b.issued_date|pretty_when }}</small></td></tr>
           {% endfor %}</tbody>
         </table>
         {% else %}<p class="text-muted mb-0">No bills yet.</p>{% endif %}

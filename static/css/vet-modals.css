@@ -12,6 +12,15 @@ body.modal-lock { overflow: hidden; }
   box-shadow: 0 20px 60px rgba(0,0,0,.35);
   animation: dropletBounce .45s cubic-bezier(.25,1,.5,1); }
 .vet-modal-box.wide { width: 90vw; max-width: 860px; }
+/* Form-wrapped modals: the <form> is the box's only child, so it must carry
+   the column flex layout — otherwise the body never scrolls and overflow:hidden
+   clips the Cancel/Save footer off the bottom of the box. */
+.vet-modal-box > form { flex: 1 1 auto; min-height: 0; display: flex;
+  flex-direction: column; overflow: hidden; }
+/* The page cascade animates content blocks with a retained transform.
+   Never apply it to overlays: it delays their first paint and re-anchors
+   position:fixed children (CPSC cascade-unveil trap). */
+main.content.cascade > .vet-overlay { animation: none; }
 @keyframes dropletBounce {
   0% { opacity: 0; transform: scale(.92) translateY(14px); }
   60% { opacity: 1; transform: scale(1.01) translateY(-2px); }
@@ -24,6 +33,18 @@ body.modal-lock { overflow: hidden; }
 /* Decision shell (small confirm) */
 .vet-modal-box.decision { width: 420px; text-align: center; }
 .vet-modal-box.decision .vet-modal-body { padding-top: .2rem; }
+/* Own-password gate shown for deletes and approvals (CPSC pattern) */
+.decision-pw { text-align: left; margin-top: .9rem; }
+.decision-pw[hidden], .decision-pw-hint[hidden] { display: none; }
+.decision-pw .fx21-field { margin-bottom: .4rem; }
+.decision-pw .effect-21 { padding-right: 2.7rem; }
+.decision-pw .effect-21.is-invalid { border-color: #dc3545; }
+.decision-pw-hint { display: block; color: #6b7a8d; font-size: .74rem; line-height: 1.35; }
+.pw-toggle { position: absolute; right: .45rem; top: .5rem; width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center; border: 0;
+  border-radius: 50%; background: transparent; color: #6b7a8d; cursor: pointer; }
+.pw-toggle:hover { background: #eef7f5; color: #0f766e; }
+.pw-toggle .ic { width: 18px; height: 18px; }
 /* Form sections */
 .form-section-card { border: 1px solid #e9e2d5; border-radius: .7rem;
   padding: 1rem 1.1rem; margin-bottom: .9rem; background: #fff; }
@@ -60,3 +81,21 @@ body.modal-lock { overflow: hidden; }
 .view-rows td { padding: .35rem 0; }
 @media (prefers-reduced-motion: reduce) {
   .vet-modal-box { animation: none; } }
+
+/* v2 — softened backdrop, teal rim, CPSC button motion */
+.vet-overlay { background: rgba(13,36,33,.5);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.vet-modal-box { border: 1px solid rgba(15,118,110,.14);
+  background: rgba(255,255,255,.98); }
+.form-section-card { background: rgba(247,251,250,.9);
+  border-color: rgba(15,118,110,.12); }
+.btn-modal-cancel, .btn-modal-save { transition: background .18s ease,
+  color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.btn-modal-save:hover { transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(46,125,50,.28); }
+.btn-modal-cancel:hover { transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(198,40,40,.22); }
+@media (prefers-reduced-motion: reduce) {
+  .btn-modal-cancel, .btn-modal-save { transition: none; }
+  .btn-modal-save:hover, .btn-modal-cancel:hover { transform: none; }
+}

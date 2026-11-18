@@ -8,20 +8,23 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 
 ## Roles
 - **Admin** — full powers: approve, mutate, Users + Vets management
-- **Staff** — operates the system: shared dashboard, queue-serve,
-  consultation logging (picks attending vet); no approve/add/toggle/users
+- **Staff** — operates the system: shared dashboard, books walk-ins,
+  queue add/serve, consultation logging (picks attending vet); no
+  approve/delete/invoice-issue/vet-profile/users
 - **Vets** — directory rows (`vets` table: name, specialty, active toggle),
   not logins; the attending vet is chosen when logging a consultation
 - **Clients** — record rows (`clients` table: name, unique phone, address),
   auto-made by guest bookings (phone dedupe); no login surface
 
 ## Features
-- User / pet registration
-- Appointment booking (owner → pending → approved/completed)
+- Guest booking (owner → pending → approved/completed) + staff **New Appointment**
+  for walk-ins/phone clients (auto client/pet, optional queue ticket)
 - Clinic queueing
-- Consultation logging + prescriptions/treatments
-- Inventory tracking
-- Billing / invoices
+- Consultation logging + free-text prescriptions/treatments
+- Billing / invoices + printable receipt
+- Settings: own profile, password, profile photo; vet profiles with photo upload
+- In-app plain-language manual: **Help → Guide** (`/admin/guide`) — English
+  walkthrough for staff and demo/checking; printable twin in `GUIDE.md`
 
 ## Project Structure
 ```
@@ -50,15 +53,18 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 │   ├── admin/pet_form.html
 │   ├── admin/users.html
 │   ├── admin/vets.html     # vet directory (KPIs, funnel, Add modal, toggles)
+│   ├── admin/guide.html    # plain-language English guide (DB-free)
 │   ├── admin/queue.html
-│   ├── admin/inventory.html
-│   ├── admin/inventory_form.html
+│   ├── admin/settings.html   # own profile/photo + vet profiles with photos
 │   └── admin/invoices.html
 ├── static/
 │   ├── css/style.css + landing.css + sidebar.css + clinic.css
-│   ├── js/main.js + sidebar.js + clinic.js
+│   ├── js/main.js + sidebar.js + clinic.js + vet-modals.js
+│   ├── uploads/avatars/      # user profile photos (runtime)
+│   ├── uploads/vets/         # vet profile photos (runtime)
 ├── pictures/                 # pet photo ORIGINALS (do-not-edit; web copies in static/images/)
 ├── README.md / CHANGELOG.md / AGENTS.md / SESSION.md
+├── GUIDE.md                  # printable Giya (twin of /admin/guide)
 └── System Requirements/      # instructor docs (untouched)
 ```
 
@@ -66,7 +72,10 @@ Web-based Pet Clinic Management System built with **Python (Flask)**, **MySQL (X
 `users` (logins: admin/staff only), `clients, vets, pets, appointments,
 clinic_queue, consultations, inventory, prescriptions_treatments, invoices`
 — created by `database/setup_db.py` (schema source of truth; guarded so
-imports never run it). One-shot live upgrade:
+imports never run it). The `inventory` table is kept only so legacy
+prescription rows still resolve a medicine name; its UI is retired.
+`setup_db.py` also runs idempotent column upgrades (`users.avatar`, vet
+photo/email/license/bio, prescription `medicine_name`). One-shot live upgrade:
 `database/migrate_clients_vets.py`. Demo ledger: `database/demo_seed.py`.
 
 ## Setup (Windows + XAMPP) — same steps on any new device
@@ -91,6 +100,10 @@ imports never run it). One-shot live upgrade:
   reuses the client record by phone (a public form never renames it), reuses an
   existing pet of the same client/name/species, and adds a `pending` appointment
   with a booking reference #.
+- Staff/Admin can book a walk-in from **Appointments → New Appointment**
+  (`POST /admin/appointments/new`): existing client or new owner/phone, existing
+  or new pet, saved `approved` with source `walkin`, optional same-day queue
+  ticket. Phones are de-duplicated the same way as guest booking.
 - Consultations name the attending vet (active directory only); the visit's
   vet fields backfill automatically. There is NO public registration.
 
@@ -109,7 +122,7 @@ imports never run it). One-shot live upgrade:
   pinned Logout, drawer on mobile) via `admin/base.html`; icons are an inline
   SVG sprite (`_sprite.html`) — no emoji, no CDN.
 - The admin system follows the CPSC Inventory port: sidebar + topbar,
-  hand-written CSS, modal shells, KPI/funnel list pages.
+  hand-written CSS, modal shells, KPI/funnel list pages, and photo cards.
 
 ## Security Notes
 - Parameterized queries only (`%s` placeholders, no string formatting into SQL).
@@ -121,9 +134,10 @@ imports never run it). One-shot live upgrade:
 - `POST /login` processes auth; `GET /login` bounces to the landing curtain.
 - Role guards (`login_required`, `role_required`) on every dashboard/booking route.
 - Server-side re-validation on every mutation: guest booking never renames a
-  client, invoice references must belong to the selected client, inventory
-  deletes are blocked while prescriptions reference the item, and
-  consultation/prescription/queue writes run in transactions.
+  client, invoice references must belong to the selected client, and
+  consultation/appointment/queue writes run in transactions.
+- Uploads are validated by magic bytes (PNG/JPEG/WEBP only), capped at 3 MB,
+  renamed server-side, and deleted by basename only.
 - Session cookies are HttpOnly + SameSite=Lax, expire after 12 hours, and are
   Secure only when `PETCLINIC_COOKIE_SECURE=1` (HTTPS deployments).
 - Config is environment-driven: `PETCLINIC_DB_HOST/NAME/USER/PASS`,

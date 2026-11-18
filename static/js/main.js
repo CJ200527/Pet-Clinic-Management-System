@@ -11,7 +11,6 @@ function openLoginCurtain() {
     document.getElementById('cService').value = svc;
     document.getElementById('cDate').value = dt;
     document.getElementById('cTime').value = tm;
-    document.getElementById('cNext').value = '/client/book-appointment';
   }
   c.classList.remove('closing');
   c.classList.add('open');

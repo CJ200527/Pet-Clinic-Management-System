@@ -1,0 +1,149 @@
+{% extends "admin/base.html" %}
+{% block title %}Services - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "Services" %}
+{% include "admin/_page_header.html" %}
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <a class="kpi-card" href="{{ url_for('admin_services', q=q, sstatus='all') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-tag"></use></svg></span>
+      <div><div class="kpi-title">Fixed Services</div><div class="kpi-value">{{ skpi.total }}</div></div>
+    </div><div class="kpi-sub">Price list</div></a>
+    <a class="kpi-card" href="{{ url_for('admin_services', q=q, sstatus='active') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+      <div><div class="kpi-title">Bookable</div><div class="kpi-value">{{ skpi.active }}</div></div>
+    </div><div class="kpi-sub">Shown on booking</div></a>
+    <a class="kpi-card" href="{{ url_for('admin_services', q=q, sstatus='inactive') }}">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></span>
+      <div><div class="kpi-title">Hidden</div><div class="kpi-value">{{ skpi.inactive }}</div></div>
+    </div><div class="kpi-sub">Not bookable</div></a>
+    <div class="kpi-card">
+      <div class="kpi-main">
+      <span class="kpi-badge badge-slate"><svg class="ic" aria-hidden="true"><use href="#k-bill"></use></svg></span>
+      <div><div class="kpi-title">Average Fee</div><div class="kpi-value">₱{{ '%.2f'|format(skpi.avg) }}</div></div>
+    </div><div class="kpi-sub">Across all services</div></div>
+  </div>
+
+  <div class="action-bar">
+    <form method="GET" action="{{ url_for('admin_services') }}" class="search-box">
+      <input type="hidden" name="sstatus" value="{{ sstatus }}">
+      <input type="text" name="q" class="form-control" placeholder="Search service or inclusion…"
+             value="{{ q or '' }}" autocomplete="off">
+      <button class="btn btn-outline-primary">Search</button>
+    </form>
+    <a class="tool-btn" title="Refresh List"
+       href="{{ url_for('admin_services', q=q, sstatus=sstatus) }}">
+      <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+    <div class="filter-wrap">
+      <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
+        <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+        {% if sstatus != 'all' %}<span class="notif-badge">•</span>{% endif %}</button>
+      <div class="filter-panel" id="barFilterPanel">
+        <form method="GET" action="{{ url_for('admin_services') }}">
+          <input type="hidden" name="q" value="{{ q or '' }}">
+          <div class="filter-cat"><strong>Availability</strong></div>
+          <select name="sstatus" class="form-select form-select-sm">
+            <option value="all" {% if sstatus == 'all' %}selected{% endif %}>All services</option>
+            <option value="active" {% if sstatus == 'active' %}selected{% endif %}>Bookable</option>
+            <option value="inactive" {% if sstatus == 'inactive' %}selected{% endif %}>Hidden</option>
+          </select>
+          <div class="d-flex gap-2 mt-3">
+            <a class="btn btn-sm btn-outline-secondary flex-fill"
+               href="{{ url_for('admin_services') }}">Clear</a>
+            <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="bar-spacer"></div>
+  </div>
+
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
+    <h5>Service Price List{% if rows %} ({{ rows|length }}){% endif %}</h5>
+    <p class="text-muted small">Services are fixed — you can change a fee, duration or inclusion here,
+      but new services cannot be added. A change applies to future consultations only.</p>
+    {% if rows %}
+    <div class="table-responsive-sm table-scroll">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>Service</th><th>Duration</th><th>Fee</th><th>Inclusions</th>
+        <th>Availability</th><th>Actions</th></tr></thead>
+      <tbody>{% for s in rows %}
+        <tr><td><strong>{{ s.name }}</strong></td>
+            <td>{{ s.duration or '—' }}</td>
+            <td><span class="price-tag">₱{{ '%.2f'|format(s.fee) }}</span></td>
+            <td class="svc-includes">{{ s.inclusions or '—' }}</td>
+            <td>{% if s.is_active %}<span class="badge bg-success">bookable</span>
+                {% else %}<span class="badge bg-secondary">hidden</span>{% endif %}</td>
+            <td class="action-cell">
+              {% if session.role == 'admin' %}
+              <button class="icon-act icon-edit" title="Edit fee and inclusions"
+                      onclick="openVetModal('editSvc{{ s.id }}');return false;">
+                <svg class="ic" aria-hidden="true"><use href="#i-edit"></use></svg></button>
+              {% else %}
+              <span class="text-muted small">Admin only</span>
+              {% endif %}
+            </td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}<p class="text-muted mb-0">No services match this search.</p>{% endif %}
+  </div></div>
+
+  {% if session.role == 'admin' %}
+  {% for s in rows %}
+  <div class="vet-overlay" id="editSvc{{ s.id }}" aria-hidden="true">
+    <div class="vet-modal-box">
+      <form method="POST" action="{{ url_for('admin_service_update', service_id=s.id) }}" autocomplete="off">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="vet-modal-header"><h3>{{ s.name }}</h3>
+          <p>Fixed fee, duration and inclusions. The service name cannot change.</p></div>
+        <div class="vet-modal-body">
+          <div class="form-section-card"><h4>Charge</h4>
+            <div class="fx21-field">
+              <input type="number" name="fee" min="0" max="1000000" step="0.01"
+                     class="effect-21" value="{{ s.fee }}" required>
+              <span class="focus-border"><i></i></span><label>Fee (₱)</label></div>
+            <div class="fx21-field">
+              <input type="text" name="duration" class="effect-21" maxlength="40"
+                     value="{{ s.duration or '' }}" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>Duration (e.g. 30 min)</label></div>
+          </div>
+          <div class="form-section-card"><h4>What's included</h4>
+            <div class="fx21-field">
+              <textarea name="inclusions" class="effect-21" rows="3" maxlength="800"
+                        placeholder=" ">{{ s.inclusions or '' }}</textarea>
+              <span class="focus-border"><i></i></span><label>Inclusions</label></div>
+          </div>
+          <div class="form-section-card"><h4>Availability</h4>
+            <label class="svc-toggle">
+              <input type="checkbox" name="is_active" value="1" {% if s.is_active %}checked{% endif %}>
+              <span>Bookable and selectable in consultations</span>
+            </label>
+            <small class="text-muted">Hidden services keep their history but cannot be chosen again.</small>
+          </div>
+          <div class="form-section-card"><h4>Confirm it's you</h4>
+            <div class="fx21-field">
+              <input type="password" name="admin_password" class="effect-21"
+                     placeholder=" " required autocomplete="current-password">
+              <span class="focus-border"><i></i></span><label>Your admin password</label>
+              <button type="button" class="pw-toggle" title="Show password"
+                      aria-label="Show password" onmousedown="event.preventDefault()"
+                      onclick="togglePwVisibility(this)">
+                <svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>
+              </button>
+            </div>
+            <small class="text-muted">Changing a fee changes what clients are billed.</small>
+          </div>
+        </div>
+        <div class="vet-modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeVetModal('editSvc{{ s.id }}')">Cancel</button>
+          <button type="submit" class="btn-modal-save">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,257 @@
+{% extends "admin/base.html" %}
+{% block title %}User Guide - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "User Guide" %}
+{% set show_filter = False %}
+{% include "admin/_page_header.html" %}
+
+{# Plain-language manual in English. Anyone on the team (or a checking
+   panelist) can read this page and run the whole system. #}
+
+<div class="guide-hero">
+  <div>
+    <h2>What is this system?</h2>
+    <p>
+      This is the <strong>Pet Clinic Management System</strong> for <em>Paws &amp; Care</em>.
+      It holds the bookings, the patient line, the check-ups, and the payments —
+      all in one place. No paper list and no Excel needed.
+    </p>
+    <p class="mb-0">
+      <strong>Two kinds of people:</strong> the <strong>client</strong> (pet owner)
+      books on the landing page and never logs in. Only <strong>Admin</strong> and
+      <strong>Staff</strong> sign in to the dashboard.
+    </p>
+  </div>
+  <div class="guide-chips">
+    <span class="guide-chip">Admin — everything</span>
+    <span class="guide-chip">Staff — view + daily work</span>
+    <span class="guide-chip">Client — no login</span>
+  </div>
+</div>
+
+<h2 class="guide-h2">The life of one patient</h2>
+<div class="guide-flow">
+  <div class="guide-flow-step"><span class="guide-num">1</span>
+    <strong>Book</strong>
+    <span>A guest books on the landing page (<b>pending</b>), or Staff books a walk-in with <b>New Appointment</b> (already approved).</span></div>
+  <div class="guide-flow-step"><span class="guide-num">2</span>
+    <strong>Approve</strong>
+    <span>Admin accepts (check) or rejects (X) the booking. Same-day bookings join the queue automatically when their time arrives.</span></div>
+  <div class="guide-flow-step"><span class="guide-num">3</span>
+    <strong>Queue</strong>
+    <span>The patient gets a number when their slot time comes (walk-ins and emergencies can be ticketed immediately).</span></div>
+  <div class="guide-flow-step"><span class="guide-num">4</span>
+    <strong>Consult</strong>
+    <span>The vet checks the pet: service, diagnosis, treatment, prescription. The fixed service fee becomes the bill.</span></div>
+  <div class="guide-flow-step"><span class="guide-num">5</span>
+    <strong>Pay</strong>
+    <span>Invoice → mark <b>paid</b> → print the receipt.</span></div>
+</div>
+
+<h2 class="guide-h2">The modules, one by one</h2>
+<div class="guide-grid">
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-dashboard"></use></svg>Dashboard</h3>
+    <div class="guide-who">Admin + Staff · view only</div>
+    <ol class="guide-steps">
+      <li>Pick a <b>Period</b> (Today / This Week / This Month / All Time). All the numbers follow it.</li>
+      <li>Press <b>Refresh</b> (the round arrow) if you just changed something.</li>
+      <li>The 4 <b>KPI cards</b>: Pending Bookings, Queue Today, Unpaid Bills, Consults Done. Click a card to open its list.</li>
+      <li>The <b>bell</b> at the top shows how many things need attention.</li>
+      <li>The charts show Revenue, Top Services, the Bookings trend and the Species mix.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg>Appointments</h3>
+    <div class="guide-who">Approve / reject: Admin · view: Staff</div>
+    <ol class="guide-steps">
+      <li>A guest books on the landing page (<b>/</b>). The booking arrives here as <b>pending</b>.</li>
+      <li><b>New Appointment</b> (Staff or Admin) books a walk-in or phone client. Pick an existing client or type a new one, then choose the pet. It saves as <b>approved</b>, ready for the queue.</li>
+      <li><b>✔</b> = approve (accept). <b>✕</b> = reject (decline). Admin only, and it asks for the admin password.</li>
+      <li>Use <b>search</b> for a name or pet, and the <b>funnel</b> (filter icon) for Period + Status.</li>
+      <li>Once approved, today's booking joins the <b>Queue</b> by itself when its scheduled time arrives. Afternoon and future bookings wait for their day/time; use <b>Add to Queue</b> only for emergencies or a manual ticket.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-queue"></use></svg>Queue</h3>
+    <div class="guide-who">Admin + Staff</div>
+    <ol class="guide-steps">
+      <li>Approved same-day bookings appear automatically when their time arrives — no need to add them by hand.</li>
+      <li>Press <b>Add to Queue</b> only for walk-ins, emergencies, or when a booking must be served early.</li>
+      <li>Numbers count up each day and never repeat; each appointment can have only one ticket.</li>
+      <li>The <b>Now-Serving</b> strip shows who is at the counter; the next two are listed below it.</li>
+      <li>Row icons: <b>play</b> = start serving, <b>check</b> = mark done, <b>skip</b> = patient did not show (kept and marked <b>Skipped</b>), <b>X</b> = delete ticket (Admin only, permanent, asks for the admin password).</li>
+      <li><b>Check (done)</b> opens the consultation form already filled in — the appointment, the vet and the service are set, and the fixed fee is shown. Finish the diagnosis and save to complete the visit.</li>
+      <li>The page refreshes itself every 30 seconds (there is a pause toggle), so due appointments join on their own.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg>Consultations</h3>
+    <div class="guide-who">Admin + Staff</div>
+    <ol class="guide-steps">
+      <li><b>Log Consultation</b> → pick the appointment and the pet.</li>
+      <li>Pick the <b>service</b>. Its fixed fee and inclusions appear; the service from the booking is preselected.</li>
+      <li>Pick the <b>attending vet</b> (only active vets appear in the dropdown).</li>
+      <li>Write the diagnosis, treatment and notes.</li>
+      <li>Save. The appointment is <b>completed</b> and an <b>unpaid invoice</b> for the fixed fee is created automatically.</li>
+      <li>On the detail page: add a prescription in plain text — medicine, dosage, instructions. No stock numbers to maintain.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg>Clients</h3>
+    <div class="guide-who">Admin + Staff · records only, no login</div>
+    <ol class="guide-steps">
+      <li>Search by name or phone number.</li>
+      <li>Press the <b>view</b> icon to see the profile, the pets and the consultation history.</li>
+      <li><b>Edit</b>: name, phone, email, address (Staff allowed).</li>
+      <li>A new client is created automatically when a guest books — the same phone number means the same client (no duplicates).</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-paw"></use></svg>Pets</h3>
+    <div class="guide-who">Admin + Staff</div>
+    <ol class="guide-steps">
+      <li>Search or filter by <b>species</b>.</li>
+      <li><b>View / Edit</b>: name, species, breed, age, weight and notes.</li>
+      <li>Every pet belongs to one client (the owner).</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg>Vets</h3>
+    <div class="guide-who">Add / toggle: Admin · view: Staff</div>
+    <ol class="guide-steps">
+      <li><b>Add Vet</b>: name, specialty (optional), phone (optional).</li>
+      <li><b>Deactivate</b>: the vet disappears from the consultation dropdown (old history stays). Asks for the admin password.</li>
+      <li><b>Activate</b>: the vet is selectable again. Asks for the admin password.</li>
+      <li>For the full profile (photo, license, email, background), use <b>Settings → Vet Profiles</b>.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-settings"></use></svg>Settings</h3>
+    <div class="guide-who">Own profile: Admin + Staff · Vet profiles: Admin</div>
+    <ol class="guide-steps">
+      <li><b>My Profile</b>: change your name, email or password. Your username stays fixed.</li>
+      <li><b>Photo</b>: choose a PNG, JPG or WEBP image (up to 3 MB) and press <b>Save photo</b>. It appears on the header bar and in the vet directory.</li>
+      <li><b>Vet Profiles</b>: press the pencil on a vet to edit their photo, specialty, license, email and background.</li>
+      <li><b>Add Vet</b> creates a new vet profile with an optional photo.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-tag"></use></svg>Services</h3>
+    <div class="guide-who">Edit: Admin · view: Staff</div>
+    <ol class="guide-steps">
+      <li>The clinic has six fixed services: General Checkup, Vaccination, Grooming, Boarding, Surgery Consult and Emergency.</li>
+      <li>Each one has a <b>fixed fee</b>, a duration and a list of <b>inclusions</b> (what the client gets).</li>
+      <li>Press the pencil on a service to change its fee, duration or inclusions. It asks for the admin password because fees affect billing.</li>
+      <li>A changed fee applies to <b>future</b> consultations only — old bills keep the amount they were issued with.</li>
+      <li>Uncheck <b>Bookable</b> to hide a service from booking; old records keep their history.</li>
+      <li>Services cannot be added or deleted — the list is fixed.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-receipt"></use></svg>Invoices</h3>
+    <div class="guide-who">Issue / mark paid: Admin · view: Staff</div>
+    <ol class="guide-steps">
+      <li><b>Issue Bill</b> (Admin) or let the consultation create it automatically.</li>
+      <li>Pick the client. The reference (appointment or consultation) must belong to that client.</li>
+      <li>Mark it <b>paid</b> (asks for the admin password) → the receipt appears with a <b>PAID</b> stamp. Cancelling a bill asks too.</li>
+      <li>Press the <b>print</b> icon for the receipt.</li>
+    </ol>
+  </div>
+
+  <div class="guide-card">
+    <h3><svg class="ic" aria-hidden="true"><use href="#i-users"></use></svg>Users</h3>
+    <div class="guide-who">Admin only</div>
+    <ol class="guide-steps">
+      <li><b>Create User</b>: username, full name, role (admin/staff), password (8+ characters).</li>
+      <li>A new user is <b>pending</b>. Approve it (asks for the admin password) before they can log in.</li>
+      <li>Reject or delete an account you no longer need. Both ask for the admin password.</li>
+      <li>You cannot delete yourself or the last admin.</li>
+    </ol>
+  </div>
+
+</div>
+
+<h2 class="guide-h2">Who can do what</h2>
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="table-responsive-sm">
+      <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Action</th><th class="text-center">Admin</th><th class="text-center">Staff</th></tr></thead>
+        <tbody>
+          <tr><td>View every list</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Book a walk-in (New Appointment)</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Approve / reject a booking</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+          <tr><td>Add to queue, serve, complete</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Log a consultation + prescription</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Edit client / pet records</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Edit my own profile + photo</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-success">yes</span></td></tr>
+          <tr><td>Edit vet profiles + photos</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+          <tr><td>Issue an invoice / mark it paid</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+          <tr><td>Edit service fees + inclusions</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+          <tr><td>Add a vet / activate / deactivate</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+          <tr><td>Manage login accounts</td><td class="text-center"><span class="badge bg-success">yes</span></td><td class="text-center"><span class="badge bg-secondary">no</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<h2 class="guide-h2">When the clinic asks for your password</h2>
+<div class="guide-notes">
+  <p><b>What it looks like:</b> press a protected action, and the confirmation card gains a <b>Your admin password</b> box. Type the password of the account you are signed in as, then press <b>Confirm</b>. The eye button shows what you typed.</p>
+  <p><b>Why:</b> being signed in is not enough for actions that touch money, access, or other people's records. Retyping the password proves it is really you, so a left-open screen or a mis-click cannot approve or delete anything.</p>
+  <p><b>Actions that ask:</b> approve or reject a booking; mark an invoice paid or cancel it; approve or reject a login account; delete a login account; activate or deactivate a vet; delete a queue ticket; change a service fee or inclusion.</p>
+  <p><b>If it says "Wrong admin password":</b> nothing changed. Close the message and try again with the correct password. Staff cannot do these actions at all, even if they know a password.</p>
+</div>
+
+<h2 class="guide-h2">Words you will see</h2>
+<div class="guide-gloss">
+  <div><b>Pending</b> — still waiting for approval.</div>
+  <div><b>Approved</b> — accepted, ready for the queue.</div>
+  <div><b>Completed</b> — the service is finished.</div>
+  <div><b>Cancelled / Rejected</b> — dropped or not pushed through.</div>
+  <div><b>Queue number</b> — the patient's turn number for today.</div>
+  <div><b>Consult</b> — the vet's check-up record.</div>
+  <div><b>Prescription</b> — the medicine and instructions written by the vet.</div>
+  <div><b>Invoice</b> — a bill that still has to be paid.</div>
+  <div><b>Fixed fee</b> — the set price of a service, the same for every client.</div>
+  <div><b>Inclusions</b> — what the client gets for the service fee.</div>
+  <div><b>Receipt</b> — proof of payment (PAID).</div>
+  <div><b>Period</b> — the date range the numbers cover.</div>
+  <div><b>KPI</b> — the big numbers at the top of a page.</div>
+  <div><b>CSRF</b> — a hidden security token in forms; automatic, do not touch it.</div>
+</div>
+
+<h2 class="guide-h2">How to start (for the demo)</h2>
+<div class="guide-card">
+  <ol class="guide-steps">
+    <li>Open <b>XAMPP</b> → <b>Start MySQL</b>.</li>
+    <li>In the terminal: <code>$env:PORT=5001</code> then <code>python app.py</code>.</li>
+    <li>Open the browser at <code>http://127.0.0.1:5001/</code>.</li>
+    <li>Press <b>Login</b> on the landing page → the curtain slides down → <code>Admin</code> / <code>123</code> (everything) or <code>Staff</code> / <code>123</code> (view + daily work).</li>
+    <li>If the demo data gets messy: <code>python database/demo_seed.py</code> (about 2 minutes, Admin/Staff accounts are untouched).</li>
+  </ol>
+</div>
+
+<h2 class="guide-h2">Common mistakes to avoid</h2>
+<div class="guide-notes">
+  <p><b>Phone number:</b> on the booking form it must be <code>09XXXXXXXXX</code> — 11 digits. Otherwise the server rejects it.</p>
+  <p><b>Password:</b> a new account needs 8+ characters. The seeded demo password (<code>123</code>) is for the demo only.</p>
+  <p><b>No 'vet' login:</b> a vet is a record (a directory entry), not an account. Do not create a user with the role <code>vet</code>.</p>
+  <p><b>Staff limits:</b> Staff can book walk-ins, run the queue, and log consultations, but cannot approve bookings, delete records, edit vet profiles or issue invoices. Ask the Admin for those — and these actions ask the Admin to retype their password.</p>
+  <p><b>Period filter:</b> it affects every list page. If rows seem missing, they may be in another period.</p>
+  <p><b>Port:</b> 5001 is the standard. Port 5000 belongs to another project (IM 103).</p>
+</div>
+
+{% endblock %}

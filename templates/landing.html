@@ -5,14 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paws & Care — Pet Clinic</title>
   <link href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}?v=20261008" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/landing.css') }}?v=20261001" rel="stylesheet">
-  <link href="{{ url_for('static', filename='css/vet-modals.css') }}?v=20261006" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/landing.css') }}?v=20261118b" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/vet-modals.css') }}?v=20261118b" rel="stylesheet">
 </head>
 <body>
+{% include "_sprite.html" %}
 
 <nav class="navbar navbar-expand-lg sticky-top vet-nav">
   <div class="container">
-    <a class="navbar-brand" href="{{ url_for('index') }}">🐾 Paws & Care</a>
+    <a class="navbar-brand" href="{{ url_for('index') }}">
+      <svg class="ic line-ic" aria-hidden="true"><use href="#i-paw"></use></svg>Paws &amp; Care</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#vetNav">
       <span class="navbar-toggler-icon"></span>
     </button>
@@ -77,17 +79,40 @@
     <div class="col-md-6 p-5">
       <div class="eyebrow">What we offer</div>
       <h2 class="serif">Complete Care for Every Paw</h2>
+      {% set offered = [
+        ('Checkup', 'General Checkup', 'i-stethoscope'),
+        ('Vaccination', 'Vaccination', 'i-syringe'),
+        ('Grooming', 'Grooming', 'i-scissors'),
+        ('Boarding', 'Boarding', 'i-home'),
+        ('Surgery', 'Surgery Consult', 'i-microscope'),
+        ('Emergency', 'Emergency', 'i-alert')
+      ] %}
       <div class="row g-3 mt-1">
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">🩺</div><strong>Checkup</strong></div></div>
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">💉</div><strong>Vaccination</strong></div></div>
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">✂️</div><strong>Grooming</strong></div></div>
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">🏠</div><strong>Boarding</strong></div></div>
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">🔬</div><strong>Surgery</strong></div></div>
-        <div class="col-6 col-lg-4"><div class="amenity"><div class="ic">🚨</div><strong>Emergency</strong></div></div>
+        {% for label, key, icon in offered %}
+        {% set ns = namespace(svc=None) %}
+        {% for s in services %}{% if s.name == key %}{% set ns.svc = s %}{% endif %}{% endfor %}
+        <div class="col-6 col-lg-4">
+          <button type="button" class="amenity" aria-expanded="false"
+                  aria-label="{{ label }} — view what is included"
+                  data-svc-label="{{ label }}" data-svc-name="{{ key }}"
+                  data-svc-icon="{{ icon }}"
+                  data-svc-fee="{{ '%.2f'|format(ns.svc.fee) if ns.svc else '' }}"
+                  data-svc-duration="{{ (ns.svc.duration or '') if ns.svc else '' }}"
+                  data-svc-inclusions="{{ (ns.svc.inclusions or '') if ns.svc else '' }}">
+            <span class="ic"><svg aria-hidden="true"><use href="#{{ icon }}"></use></svg></span>
+            <strong>{{ label }}</strong>
+            <span class="amenity-more">View details</span>
+          </button>
+        </div>
+        {% endfor %}
       </div>
+      <p class="services-hint">Tap a service to see the fee and what is included. Keep several open to compare.</p>
     </div>
   </div></div>
 </section>
+
+<!-- Comparison dock: service detail panels stay here until closed -->
+<div class="svc-dock" id="svcDock" aria-label="Service details"></div>
 
 <!-- 4. STATS -->
 <section class="section text-center">
@@ -109,27 +134,33 @@
       <h2 class="serif mb-0">Popular Visits</h2>
       <a href="#booking-wrap" class="btn btn-outline-ink btn-sm btn-pill">Book a Visit</a>
     </div>
+    {% set pick = namespace(checkup=None, vax=None, groom=None) %}
+    {% for s in services %}
+      {% if s.name == 'General Checkup' %}{% set pick.checkup = s %}{% endif %}
+      {% if s.name == 'Vaccination' %}{% set pick.vax = s %}{% endif %}
+      {% if s.name == 'Grooming' %}{% set pick.groom = s %}{% endif %}
+    {% endfor %}
     <div class="row g-4">
       <div class="col-md-4"><div class="svc-card">
         <img src="{{ url_for('static', filename='images/668105126_2516458012117969_1397912013581742414_n.png') }}" alt="Dog checkup">
         <div class="p-3">
-          <h5 class="serif">Dog Wellness</h5>
+          <h5 class="serif">General Checkup</h5>
           <table class="spec-table">
-            <tr><td>Fee</td><td class="price">₱350</td></tr>
-            <tr><td>Duration</td><td>30 min</td></tr>
-            <tr><td>Includes</td><td>Exam + vaccine check</td></tr>
+            <tr><td>Fee</td><td class="price">₱{{ '%.2f'|format(pick.checkup.fee) if pick.checkup else '500.00' }}</td></tr>
+            <tr><td>Duration</td><td>{{ pick.checkup.duration if pick.checkup and pick.checkup.duration else '30 min' }}</td></tr>
+            <tr><td>Includes</td><td>{{ pick.checkup.inclusions if pick.checkup and pick.checkup.inclusions else 'Exam + health advice' }}</td></tr>
           </table>
           <a href="#booking-wrap" class="btn btn-vet btn-pill btn-sm mt-2">Book</a>
         </div>
       </div></div>
       <div class="col-md-4"><div class="svc-card">
-        <img src="{{ url_for('static', filename='images/455224596_371521639331305_5073043319565174408_n.png') }}" alt="Cat checkup">
+        <img src="{{ url_for('static', filename='images/455224596_371521639331305_5073043319565174408_n.png') }}" alt="Cat vaccination">
         <div class="p-3">
-          <h5 class="serif">Cat Wellness</h5>
+          <h5 class="serif">Vaccination</h5>
           <table class="spec-table">
-            <tr><td>Fee</td><td class="price">₱350</td></tr>
-            <tr><td>Duration</td><td>30 min</td></tr>
-            <tr><td>Includes</td><td>Exam + deworming</td></tr>
+            <tr><td>Fee</td><td class="price">₱{{ '%.2f'|format(pick.vax.fee) if pick.vax else '600.00' }}</td></tr>
+            <tr><td>Duration</td><td>{{ pick.vax.duration if pick.vax and pick.vax.duration else '20 min' }}</td></tr>
+            <tr><td>Includes</td><td>{{ pick.vax.inclusions if pick.vax and pick.vax.inclusions else 'Vaccine dose + record' }}</td></tr>
           </table>
           <a href="#booking-wrap" class="btn btn-vet btn-pill btn-sm mt-2">Book</a>
         </div>
@@ -137,17 +168,17 @@
       <div class="col-md-4"><div class="svc-card">
         <img src="{{ url_for('static', filename='images/791436288_1609101174218823_7364752683352321981_n.png') }}" alt="Grooming">
         <div class="p-3">
-          <h5 class="serif">Groom & Shine</h5>
+          <h5 class="serif">Groom &amp; Shine</h5>
           <table class="spec-table">
-            <tr><td>Fee</td><td class="price">₱450</td></tr>
-            <tr><td>Duration</td><td>1 hour</td></tr>
-            <tr><td>Includes</td><td>Bath + cut + nails</td></tr>
+            <tr><td>Fee</td><td class="price">₱{{ '%.2f'|format(pick.groom.fee) if pick.groom else '500.00' }}</td></tr>
+            <tr><td>Duration</td><td>{{ pick.groom.duration if pick.groom and pick.groom.duration else '1 hour' }}</td></tr>
+            <tr><td>Includes</td><td>{{ pick.groom.inclusions if pick.groom and pick.groom.inclusions else 'Bath + trim + nails' }}</td></tr>
           </table>
           <a href="#booking-wrap" class="btn btn-vet btn-pill btn-sm mt-2">Book</a>
         </div>
       </div></div>
     </div>
-    <small class="text-muted">Sample fees — confirm current rates with the clinic.</small>
+    <small class="text-muted">Current fixed fees — the clinic confirms the final charge at check-in.</small>
   </div>
 </section>
 
@@ -193,12 +224,18 @@
         <div class="col-md-3">
           <label class="form-label" for="bService">Service</label>
           <select id="bService" name="service" class="form-select">
-            <option>General Checkup</option>
-            <option>Vaccination</option>
-            <option>Grooming</option>
-            <option>Boarding</option>
-            <option>Surgery Consult</option>
-            <option>Emergency</option>
+            {% if services %}
+              {% for s in services %}
+              <option value="{{ s.name }}">{{ s.name }} — ₱{{ '%.2f'|format(s.fee) }}</option>
+              {% endfor %}
+            {% else %}
+              <option>General Checkup</option>
+              <option>Vaccination</option>
+              <option>Grooming</option>
+              <option>Boarding</option>
+              <option>Surgery Consult</option>
+              <option>Emergency</option>
+            {% endif %}
           </select>
         </div>
         <div class="col-md-3">
@@ -228,7 +265,7 @@
       {% if vets %}
         {% for vet in vets %}
         <div class="col-md-4"><div class="amenity">
-          <div class="ic">👩‍⚕️👨‍⚕️</div>
+          <div class="ic"><svg aria-hidden="true"><use href="#i-stethoscope"></use></svg></div>
           <strong>Dr. {{ vet.full_name }}</strong><br>
           <small class="text-muted">{{ vet.specialty or 'Licensed Veterinarian' }}</small>
         </div></div>
@@ -246,7 +283,9 @@
     <div class="col-md-6 p-5">
       <div class="eyebrow">Get in touch</div>
       <h2 class="serif">Visit the Clinic</h2>
-      <p>Main St., Your Town<br>📞 0917-000-0000<br>✉️ hello@petclinic.local</p>
+      <p>Main St., Your Town<br>
+        <svg class="ic line-ic" aria-hidden="true"><use href="#i-phone"></use></svg>0917-000-0000<br>
+        <svg class="ic line-ic" aria-hidden="true"><use href="#i-mail"></use></svg>hello@petclinic.local</p>
       <p class="text-muted"><small>Open Mon–Sat, 8am–6pm. (Confirm address, number & hours.)</small></p>
       <a href="#booking-wrap" class="btn btn-dark btn-pill">Book Direct</a>
     </div>
@@ -261,7 +300,7 @@
   <div class="container">
     <div class="row g-4">
       <div class="col-md-3">
-        <h5 class="serif">🐾 Paws & Care</h5>
+        <h5 class="serif"><svg class="ic line-ic" aria-hidden="true"><use href="#i-paw"></use></svg>Paws &amp; Care</h5>
         <p><small>Gentle, modern care for dogs, cats and small companions.</small></p>
       </div>
       <div class="col-md-3">
@@ -290,7 +329,7 @@
 <div id="loginCurtain" aria-hidden="true">
   <div class="curtain-bg"></div><div class="curtain-shade"></div>
   <div class="curtain-card">
-    <p class="eyebrow text-center">🐾 Paws & Care</p>
+    <p class="eyebrow text-center"><svg class="ic line-ic" aria-hidden="true"><use href="#i-paw"></use></svg>Paws &amp; Care</p>
     <h2 class="serif text-center">Welcome Back</h2>
     <p class="text-muted text-center">Admin and Staff portal login.</p>
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -331,7 +370,8 @@
     </div>
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/main.js') }}?v=20261001"></script>
+<script src="{{ url_for('static', filename='js/landing-services.js') }}?v=20261118b"></script>
+<script src="{{ url_for('static', filename='js/main.js') }}?v=20261117a"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
   const gName = document.getElementById('gName');

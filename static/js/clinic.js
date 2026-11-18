@@ -12,23 +12,35 @@ document.addEventListener('DOMContentLoaded', () => {
   tick();
   setInterval(tick, 1000);
 
-  // Filter + bell panel toggles (header pair + any bar pair; one open at a time).
-  const pairs = [
-    [document.getElementById('filterBtn'), document.getElementById('filterPanel')],
-    [document.getElementById('barFilterBtn'), document.getElementById('barFilterPanel')],
-    [document.getElementById('bellBtn'), document.getElementById('bellPanel')],
-  ].filter(([b, p]) => b && p);
+  // Filter + bell panel toggles: every .filter-wrap/.notif-wrap pair on the
+  // page (action bars, chart cards, header bell). One panel open at a time.
+  const panelHost = (p) => p.closest('.card, .chart-card');
+  const pairs = [];
+  document.querySelectorAll('.filter-wrap, .notif-wrap').forEach((wrap) => {
+    const btn = wrap.querySelector(':scope > button');
+    const panel = wrap.querySelector('.filter-panel, .notif-panel');
+    if (btn && panel) pairs.push([btn, panel]);
+  });
   pairs.forEach(([btn, panel]) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const wasOpen = panel.classList.contains('open');
-      pairs.forEach(([, p]) => p.classList.remove('open'));
-      if (!wasOpen) panel.classList.add('open');
+      pairs.forEach(([, p]) => {
+        p.classList.remove('open');
+        panelHost(p)?.classList.remove('pop-front');
+      });
+      if (!wasOpen) {
+        panel.classList.add('open');
+        panelHost(panel)?.classList.add('pop-front');
+      }
     });
   });
   const closeAllPanels = () => {
     document.querySelectorAll('.filter-panel.open, .notif-panel.open')
-      .forEach((p) => p.classList.remove('open'));
+      .forEach((p) => {
+        p.classList.remove('open');
+        panelHost(p)?.classList.remove('pop-front');
+      });
   };
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.filter-wrap') && !e.target.closest('.notif-wrap')) closeAllPanels();
@@ -57,6 +69,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cascade unveil is CSS-only (main.content.cascade) so it starts at first
   // paint — no JS class-adding, which used to flash the content first.
+
+  // Toasts: server-rendered flashes slide in, auto-dismiss, or close on click.
+  const dismissToast = (t) => {
+    t.classList.add('leaving');
+    setTimeout(() => t.remove(), 300);
+  };
+  document.querySelectorAll('.toast').forEach((t) => {
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => dismissToast(t), 5000);
+    t.querySelector('.toast-x')?.addEventListener('click', () => dismissToast(t));
+  });
 
   // Skeleton overlay: only plays on fresh login (?welcome=1), ~1.2s then fade.
   const skeleton = document.getElementById('skeleton-overlay');

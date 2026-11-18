@@ -1,0 +1,314 @@
+{% extends "admin/base.html" %}
+{% block title %}Settings - Pet Clinic{% endblock %}
+{% block content %}
+{% set page_title = "Settings" %}
+{% include "admin/_page_header.html" %}
+
+<div class="settings-grid">
+  <!-- ---------- My Profile ---------- -->
+  <div class="card shadow-sm settings-card" id="profile">
+    <div class="card-body">
+      <h5><svg class="ic" aria-hidden="true"><use href="#i-settings"></use></svg>My Profile</h5>
+      <p class="settings-sub">This is the account you use to sign in. Everything here
+        appears on the header bar after you save.</p>
+
+      <div class="profile-photo-row">
+        <div class="profile-avatar" id="avatarPreview">
+          {% if avatar_url %}
+          <img src="{{ avatar_url }}" alt="Your profile photo">
+          {% else %}
+          <span>{{ (profile.full_name or '?')[:1] }}</span>
+          {% endif %}
+        </div>
+        <div>
+          <form method="POST" action="{{ url_for('admin_settings_photo') }}"
+                enctype="multipart/form-data" class="photo-form">
+            <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+            <input type="file" name="photo" id="avatarInput"
+                   accept="image/png,image/jpeg,image/webp" hidden>
+            <div class="photo-actions">
+              <label for="avatarInput" class="btn-photo">
+                <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>
+                Choose photo</label>
+              <button type="submit" class="btn btn-sm btn-outline-primary">Save photo</button>
+              {% if avatar_url %}
+              <button type="submit" class="btn btn-sm btn-outline-danger"
+                      name="photo_action" value="remove">Remove</button>
+              {% endif %}
+            </div>
+            <p class="photo-hint" id="photoHint">PNG, JPG or WEBP · up to 3 MB.</p>
+          </form>
+        </div>
+      </div>
+
+      <div class="settings-badges">
+        <span class="badge bg-info text-dark">{{ profile.role }}</span>
+        {% if profile.status == 'approved' %}
+        <span class="badge bg-success">approved</span>
+        {% else %}
+        <span class="badge bg-secondary">{{ profile.status }}</span>
+        {% endif %}
+      </div>
+
+      <form method="POST" action="{{ url_for('admin_settings_profile') }}" autocomplete="off">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <div class="settings-field">
+          <label for="pfName">Full name</label>
+          <input class="form-control" type="text" id="pfName" name="full_name"
+                 value="{{ profile.full_name }}" required>
+        </div>
+        <div class="settings-field">
+          <label for="pfEmail">Email address</label>
+          <input class="form-control" type="email" id="pfEmail" name="email"
+                 value="{{ profile.email }}" required>
+        </div>
+        <div class="settings-field">
+          <label for="pfUser">Username</label>
+          <input class="form-control" type="text" id="pfUser"
+                 value="{{ profile.username }}" readonly>
+          <p class="photo-hint">Usernames cannot be changed (that is your sign-in name).</p>
+        </div>
+
+        <details class="settings-pw">
+          <summary>Change my password (optional)</summary>
+          <div class="settings-field mt-2">
+            <label for="pfCur">Current password</label>
+            <input class="form-control" type="password" id="pfCur"
+                   name="current_password" autocomplete="current-password">
+          </div>
+          <div class="settings-field">
+            <label for="pfNew">New password</label>
+            <input class="form-control" type="password" id="pfNew"
+                   name="new_password" autocomplete="new-password" minlength="8">
+          </div>
+          <div class="settings-field">
+            <label for="pfCon">Repeat new password</label>
+            <input class="form-control" type="password" id="pfCon"
+                   name="confirm_password" autocomplete="new-password" minlength="8">
+          </div>
+          <p class="photo-hint">Leave all three boxes empty to keep your current password.</p>
+        </details>
+
+        <button type="submit" class="btn btn-teal-save">Save profile</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ---------- Vet Profiles ---------- -->
+  <div class="card shadow-sm settings-card" id="vets">
+    <div class="card-body">
+      <div class="settings-head">
+        <div>
+          <h5><svg class="ic" aria-hidden="true"><use href="#i-stethoscope"></use></svg>Vet Profiles</h5>
+          <p class="settings-sub">Photos and details shown when you assign a vet to a visit.</p>
+        </div>
+        {% if session.role == 'admin' %}
+        <button type="button" class="btn-add"
+                onclick="openVetModal('vetModalNew');return false;">
+          <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add Vet</button>
+        {% endif %}
+      </div>
+
+      {% if vets %}
+      <div class="vet-list">
+        {% for v in vets %}
+        <div class="vet-row">
+          <div class="vet-thumb">
+            {% if v.photo %}
+            <img src="{{ vet_photo_url(v.photo) }}" alt="Dr. {{ v.full_name }}">
+            {% else %}
+            {{ (v.full_name or '?')[:1] }}
+            {% endif %}
+          </div>
+          <div class="vet-main">
+            <strong>Dr. {{ v.full_name }}</strong>
+            <div class="vet-meta">
+              {{ v.specialty or 'General practice' }}
+              {% if v.phone %} · {{ v.phone }}{% endif %}
+              {% if v.email %} · {{ v.email }}{% endif %}
+            </div>
+            <div class="settings-badges mt-1">
+              {% if v.is_active %}
+              <span class="badge bg-success">active</span>
+              {% else %}
+              <span class="badge bg-secondary">inactive</span>
+              {% endif %}
+              {% if v.license_no %}
+              <span class="badge bg-light text-dark">Lic. {{ v.license_no }}</span>
+              {% endif %}
+              <span class="badge bg-info text-dark">{{ v.consults }} consult{{ '' if v.consults == 1 else 's' }}</span>
+            </div>
+          </div>
+          {% if session.role == 'admin' %}
+          <div class="vet-side">
+            <button type="button" class="icon-act icon-edit" title="Edit vet profile"
+                    onclick="openVetModal('vetModal{{ v.id }}');return false;">
+              <svg class="ic" aria-hidden="true"><use href="#i-edit"></use></svg></button>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="settings-empty">No vet profiles yet.
+        {% if session.role == 'admin' %}Use <strong>Add Vet</strong> to create the first one.{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if session.role == 'admin' %}
+<!-- Add vet -->
+<div class="vet-overlay" id="vetModalNew" aria-hidden="true">
+  <div class="vet-modal-box">
+    <form method="POST" action="{{ url_for('admin_settings_vet_save') }}"
+          enctype="multipart/form-data" autocomplete="off">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <div class="vet-modal-header"><h3>Add Vet</h3>
+        <p>New vets enter <strong>active</strong> and can be assigned at once.</p></div>
+      <div class="vet-modal-body">
+        <div class="form-section-card"><h4>Photo</h4>
+          <div class="fx21-field">
+            <input type="file" name="photo" class="form-control form-control-sm"
+                   accept="image/png,image/jpeg,image/webp">
+            <p class="photo-hint">PNG, JPG or WEBP · up to 3 MB. You can add this later.</p>
+          </div>
+        </div>
+        <div class="form-section-card"><h4>Identity</h4>
+          <div class="fx21-field">
+            <input type="text" name="full_name" class="effect-21" required>
+            <span class="focus-border"><i></i></span><label>Full name</label></div>
+          <div class="vet-form-grid">
+            <div class="fx21-field">
+              <input type="text" name="specialty" class="effect-21" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>Specialty (optional)</label></div>
+            <div class="fx21-field">
+              <input type="text" name="license_no" class="effect-21" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>License no. (optional)</label></div>
+          </div>
+          <div class="vet-form-grid">
+            <div class="fx21-field">
+              <input type="text" name="phone" class="effect-21" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>Phone (optional)</label></div>
+            <div class="fx21-field">
+              <input type="email" name="email" class="effect-21" placeholder=" ">
+              <span class="focus-border"><i></i></span><label>Email (optional)</label></div>
+          </div>
+          <div class="fx21-field">
+            <textarea name="bio" class="effect-21" rows="2" placeholder=" "></textarea>
+            <span class="focus-border"><i></i></span><label>Short background (optional)</label></div>
+          <div class="fx21-field">
+            <select name="is_active" class="effect-21">
+              <option value="1" selected>Active — can be assigned</option>
+              <option value="0">Inactive — not assignable</option>
+            </select><label>Status</label></div>
+        </div>
+      </div>
+      <div class="vet-modal-footer">
+        <button type="button" class="btn-modal-cancel"
+                onclick="closeVetModal('vetModalNew')">Cancel</button>
+        <button type="submit" class="btn-modal-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for v in vets %}
+<!-- Edit vet: {{ v.id }} -->
+<div class="vet-overlay" id="vetModal{{ v.id }}" aria-hidden="true">
+  <div class="vet-modal-box">
+    <form method="POST" action="{{ url_for('admin_settings_vet_save') }}"
+          enctype="multipart/form-data" autocomplete="off">
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="vet_id" value="{{ v.id }}">
+      <div class="vet-modal-header"><h3>Edit Vet</h3>
+        <p>Update Dr. {{ v.full_name }}’s profile and photo.</p></div>
+      <div class="vet-modal-body">
+        <div class="form-section-card"><h4>Photo</h4>
+          <div class="vet-photo-edit">
+            <div class="vet-thumb">
+              {% if v.photo %}
+              <img src="{{ vet_photo_url(v.photo) }}" alt="Dr. {{ v.full_name }}">
+              {% else %}
+              {{ (v.full_name or '?')[:1] }}
+              {% endif %}
+            </div>
+            <div class="flex-grow-1">
+              <input type="file" name="photo" class="form-control form-control-sm"
+                     accept="image/png,image/jpeg,image/webp">
+              <p class="photo-hint">Leave empty to keep the current photo.</p>
+            </div>
+          </div>
+          {% if v.photo %}
+          <label class="vet-remove-photo">
+            <input type="checkbox" name="remove_photo" value="1"> Remove the current photo</label>
+          {% endif %}
+        </div>
+        <div class="form-section-card"><h4>Identity</h4>
+          <div class="fx21-field">
+            <input type="text" name="full_name" class="effect-21" required
+                   value="{{ v.full_name }}">
+            <span class="focus-border"><i></i></span><label>Full name</label></div>
+          <div class="vet-form-grid">
+            <div class="fx21-field">
+              <input type="text" name="specialty" class="effect-21" placeholder=" "
+                     value="{{ v.specialty or '' }}">
+              <span class="focus-border"><i></i></span><label>Specialty (optional)</label></div>
+            <div class="fx21-field">
+              <input type="text" name="license_no" class="effect-21" placeholder=" "
+                     value="{{ v.license_no or '' }}">
+              <span class="focus-border"><i></i></span><label>License no. (optional)</label></div>
+          </div>
+          <div class="vet-form-grid">
+            <div class="fx21-field">
+              <input type="text" name="phone" class="effect-21" placeholder=" "
+                     value="{{ v.phone or '' }}">
+              <span class="focus-border"><i></i></span><label>Phone (optional)</label></div>
+            <div class="fx21-field">
+              <input type="email" name="email" class="effect-21" placeholder=" "
+                     value="{{ v.email or '' }}">
+              <span class="focus-border"><i></i></span><label>Email (optional)</label></div>
+          </div>
+          <div class="fx21-field">
+            <textarea name="bio" class="effect-21" rows="2"
+                      placeholder=" ">{{ v.bio or '' }}</textarea>
+            <span class="focus-border"><i></i></span><label>Short background (optional)</label></div>
+          <div class="fx21-field">
+            <select name="is_active" class="effect-21">
+              <option value="1" {% if v.is_active %}selected{% endif %}>Active — can be assigned</option>
+              <option value="0" {% if not v.is_active %}selected{% endif %}>Inactive — not assignable</option>
+            </select><label>Status</label></div>
+        </div>
+      </div>
+      <div class="vet-modal-footer">
+        <button type="button" class="btn-modal-cancel"
+                onclick="closeVetModal('vetModal{{ v.id }}')">Cancel</button>
+        <button type="submit" class="btn-modal-save">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+<script>
+(function () {
+  var input = document.getElementById('avatarInput');
+  if (!input) return;
+  input.addEventListener('change', function () {
+    var file = input.files && input.files[0];
+    var hint = document.getElementById('photoHint');
+    if (!file) return;
+    var box = document.getElementById('avatarPreview');
+    if (box) {
+      var img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.alt = 'Selected photo';
+      box.innerHTML = '';
+      box.appendChild(img);
+    }
+    if (hint) hint.textContent = file.name + ' is ready — click “Save photo”.';
+  });
+})();
+</script>
+{% endblock %}

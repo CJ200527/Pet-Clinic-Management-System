@@ -26,6 +26,27 @@ SEEDS = [
     ("Clinic Staff", "Staff", "staff@clinic.com", "123", "staff", "09170000002"),
 ]
 
+# Fixed service menu: (name, fee, duration, inclusions, sort_order).
+# Fees are mid-range 2026 Philippine clinic rates (consult 300-800, vaccines
+# 200-950, grooming 400-1100 by size, boarding 150-900/night, emergency fees
+# 500-2500). Editable later in Admin -> Services.
+SERVICE_SEEDS = [
+    ("General Checkup", 500.00, "30 min",
+     "Physical examination, weight and temperature check, health assessment,"
+     " care advice.", 1),
+    ("Vaccination", 600.00, "20 min",
+     "Vaccine dose, quick health check before the shot, vaccination record.", 2),
+    ("Grooming", 500.00, "60 min",
+     "Bath, blow-dry, haircut or trim, nail trim, ear cleaning.", 3),
+    ("Boarding", 450.00, "Per night",
+     "Cage or room, food and water, litter for cats, daily cleaning and care.", 4),
+    ("Surgery Consult", 800.00, "30 min",
+     "Pre-surgery assessment, anesthesia plan, procedure and cost estimate.", 5),
+    ("Emergency", 1000.00, "30 min",
+     "Immediate triage and first aid, priority attention; treatment billed"
+     " separately.", 6),
+]
+
 SCHEMA = [
     """CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -37,6 +58,7 @@ SCHEMA = [
       status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'approved',
       phone VARCHAR(20) NULL,
       address TEXT NULL,
+      avatar VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS clients (
@@ -51,8 +73,23 @@ SCHEMA = [
       full_name VARCHAR(100) NOT NULL,
       specialty VARCHAR(100) NULL,
       phone VARCHAR(20) NULL,
+      email VARCHAR(100) NULL,
+      license_no VARCHAR(50) NULL,
+      bio TEXT NULL,
+      photo VARCHAR(255) NULL,
       is_active TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
+    """CREATE TABLE IF NOT EXISTS services (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(80) NOT NULL UNIQUE,
+      fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+      duration VARCHAR(40) NULL,
+      inclusions TEXT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4""",
     """CREATE TABLE IF NOT EXISTS pets (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,6 +126,7 @@ SCHEMA = [
       source ENUM('guest', 'walkin') NOT NULL DEFAULT 'guest',
       status ENUM('pending', 'approved', 'completed', 'cancelled')
         NOT NULL DEFAULT 'pending',
+      auto_queue TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_appt_pet FOREIGN KEY (pet_id)
         REFERENCES pets (id) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -122,6 +160,7 @@ SCHEMA = [
       appointment_id INT NOT NULL,
       pet_id INT NOT NULL,
       vet_id INT NOT NULL,
+      service_id INT NULL,
       diagnosis TEXT NOT NULL,
       treatment TEXT NULL,
       notes TEXT NULL,
@@ -137,6 +176,7 @@ SCHEMA = [
       id INT AUTO_INCREMENT PRIMARY KEY,
       consultation_id INT NOT NULL,
       inventory_id INT NULL,
+      medicine_name VARCHAR(120) NULL,
       dosage VARCHAR(100) NULL,
       quantity_used INT NOT NULL DEFAULT 1,
       instructions TEXT NULL,
@@ -207,6 +247,35 @@ def run_setup(db_name=DB_NAME):
                 cur.execute("ALTER TABLE clinic_queue ADD UNIQUE KEY"
                             " uq_queue_day_number (queue_date, queue_number)")
                 print("Migrated: unique queue number per day.")
+            # Settings/upload columns (avatars, vet profiles, free-text medicine).
+            upgrades = [
+                ("users", "avatar", "ALTER TABLE users ADD COLUMN avatar"
+                 " VARCHAR(255) NULL AFTER address"),
+                ("vets", "photo", "ALTER TABLE vets ADD COLUMN photo"
+                 " VARCHAR(255) NULL AFTER phone"),
+                ("vets", "email", "ALTER TABLE vets ADD COLUMN email"
+                 " VARCHAR(100) NULL AFTER phone"),
+                ("vets", "license_no", "ALTER TABLE vets ADD COLUMN license_no"
+                 " VARCHAR(50) NULL AFTER email"),
+                ("vets", "bio", "ALTER TABLE vets ADD COLUMN bio"
+                 " TEXT NULL AFTER license_no"),
+                ("prescriptions_treatments", "medicine_name",
+                 "ALTER TABLE prescriptions_treatments ADD COLUMN medicine_name"
+                 " VARCHAR(120) NULL AFTER inventory_id"),
+                ("appointments", "auto_queue",
+                 "ALTER TABLE appointments ADD COLUMN auto_queue"
+                 " TINYINT(1) NOT NULL DEFAULT 1 AFTER status"),
+                ("consultations", "service_id",
+                 "ALTER TABLE consultations ADD COLUMN service_id INT NULL"
+                 " AFTER vet_id"),
+            ]
+            for table, column, ddl in upgrades:
+                cur.execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS"
+                            " WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s"
+                            " AND COLUMN_NAME=%s", (db_name, table, column))
+                if cur.fetchone()[0] == 0:
+                    cur.execute(ddl)
+                    print(f"Migrated: {table}.{column} column added.")
             cur.execute("SELECT COUNT(*) FROM users")
             seeded = 0
             if cur.fetchone()[0] == 0:
@@ -223,6 +292,13 @@ def run_setup(db_name=DB_NAME):
                     "INSERT INTO vets (full_name, specialty) VALUES"
                     " ('Duty Veterinarian', 'General')")
                 seeded += 1
+            cur.execute("SELECT COUNT(*) FROM services")
+            if cur.fetchone()[0] == 0:
+                for name, fee, duration, inclusions, order in SERVICE_SEEDS:
+                    cur.execute(
+                        "INSERT INTO services (name, fee, duration, inclusions,"
+                        " sort_order) VALUES (%s,%s,%s,%s,%s)",
+                        (name, fee, duration, inclusions, order))
             cur.execute("SHOW TABLES")
             tables = [r[0] for r in cur.fetchall()]
     finally:

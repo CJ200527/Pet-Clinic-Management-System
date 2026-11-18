@@ -11,6 +11,7 @@
     .paid-stamp { position: absolute; top: 1.5rem; right: 1.5rem; border: 3px solid #2e7d32;
       color: #2e7d32; font-weight: 800; padding: .2rem .8rem; border-radius: .4rem;
       transform: rotate(8deg); }
+    .receipt h3 .ic { width: 22px; height: 22px; vertical-align: -4px; color: #0f766e; }
     @media print {
       body { background: #fff; }
       .receipt { margin: 0; max-width: none; border-radius: 0; }
@@ -19,15 +20,16 @@
   </style>
 </head>
 <body>
+{% include "_sprite.html" %}
 <div class="receipt">
   {% if inv.status == 'paid' %}<div class="paid-stamp">PAID</div>{% endif %}
-  <h3 class="serif">🐾 Paws &amp; Care Pet Clinic</h3>
-  <p class="text-muted">Official Receipt · #{{ inv.id }} · {{ inv.issued_date }}</p>
+  <h3 class="serif"><svg class="ic" aria-hidden="true"><use href="#i-paw"></use></svg> Paws &amp; Care Pet Clinic</h3>
+  <p class="text-muted">Official Receipt · #{{ inv.id }} · {{ inv.issued_date|pretty_date }}</p>
   <hr>
   <table class="table">
     <tr><th>Billed To</th><td>{{ inv.owner_name }}{% if inv.phone %} ({{ inv.phone }}){% endif %}</td></tr>
     <tr><th>Pet</th><td>{{ inv.pet_name or '-' }}</td></tr>
-    <tr><th>Visit</th><td>{{ inv.appointment_date or '-' }} · {{ inv.reason or '' }}</td></tr>
+    <tr><th>Visit</th><td>{{ inv.appointment_date|pretty_date if inv.appointment_date else '-' }} · {{ inv.reason or '' }}</td></tr>
     <tr><th>Amount Due</th><td><strong>₱{{ inv.amount }}</strong></td></tr>
     <tr><th>Status</th><td>{{ inv.status|capitalize }}</td></tr>
   </table>

@@ -3,13 +3,7 @@
 {% block content %}
 {% set page_title = "Consultations" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+<div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
     <div class="kpi-card"><div class="kpi-main">
       <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
       <div><div class="kpi-title">Total Logged</div><div class="kpi-value">{{ ckpi.total }}</div></div>
@@ -35,7 +29,6 @@
     <a class="tool-btn" title="Refresh List"
        href="{{ url_for('admin_consultations', period=period, q=q, rx=rx) }}">
       <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
-    <div class="bar-spacer"></div>
     <div class="filter-wrap">
       <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
         <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
@@ -65,18 +58,20 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
     <button class="btn-add" onclick="openVetModal('logConsultModal');return false;">
       <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Log Consultation</button>
   </div>
 
   <div class="card shadow-sm table-card-fill"><div class="card-body">
     {% if rows %}
-    <div class="table-responsive-sm">
+    <div class="table-responsive-sm table-scroll">
     <table class="table table-sm align-middle">
-      <thead><tr><th>#</th><th>Date</th><th>Pet</th><th>Logged By</th><th>Diagnosis</th>
-        <th class="text-end">Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>Date</th><th>Pet</th><th>Service</th><th>Logged By</th><th>Diagnosis</th>
+        <th>Actions</th></tr></thead>
       <tbody>{% for c in rows %}
-        <tr><td>{{ c.id }}</td><td>{{ c.consultation_date }}</td><td>{{ c.pet_name }}</td>
+        <tr><td>{{ c.id }}</td><td>{{ c.consultation_date|pretty_when }}</td><td>{{ c.pet_name }}</td>
+            <td>{{ c.service_name or '—' }}</td>
             <td>{{ c.vet_name }}</td><td>{{ c.diagnosis[:80] }}</td>
             <td class="action-cell">
               <a class="icon-act icon-view" title="View + prescriptions"
@@ -89,26 +84,41 @@
     {% else %}<p class="text-muted mb-0">No consultations logged yet.</p>{% endif %}
   </div></div>
 
+  {% include "admin/_pager.html" %}
+
   <!-- Log modal (CPSC shell): create without leaving the page -->
   <div class="vet-overlay" id="logConsultModal" aria-hidden="true">
     <div class="vet-modal-box">
       <form method="POST" action="{{ url_for('admin_consultation_new') }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="vet-modal-header"><h3>Log Consultation</h3>
-          <p>Saving completes the appointment.</p></div>
+          <p>Saving completes the appointment and issues the bill.</p></div>
         <div class="vet-modal-body">
           <div class="form-section-card"><h4>Visit</h4>
             <div class="fx21-field">
               <select name="appointment_id" class="effect-21" required>
                 {% if eligible %}
                   {% for a in eligible %}
-                  <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date }})</option>
+                  <option value="{{ a.id }}" data-service="{{ a.reason }}"
+                          data-vet="{{ a.vet_id or '' }}">#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date|pretty_date }})</option>
                   {% endfor %}
                 {% else %}
                   <option value="">No approved appointments available</option>
                 {% endif %}
               </select>
               <span class="focus-border"><i></i></span><label>Appointment</label></div>
+            <div class="fx21-field">
+              <select name="service_id" class="effect-21" required>
+                {% if services %}
+                  {% for s in services %}
+                  <option value="{{ s.id }}" data-name="{{ s.name }}"
+                          data-fee="{{ s.fee }}" data-inclusions="{{ s.inclusions or '' }}">{{ s.name }} — ₱{{ '%.2f'|format(s.fee) }}</option>
+                  {% endfor %}
+                {% else %}
+                  <option value="">No bookable services</option>
+                {% endif %}
+              </select>
+              <span class="focus-border"><i></i></span><label>Service</label></div>
             <div class="fx21-field">
               <select name="vet_id" class="effect-21" required>
                 {% if active_vets %}
@@ -131,9 +141,14 @@
             <div class="fx21-field">
               <textarea name="notes" class="effect-21" rows="2"></textarea>
               <span class="focus-border"><i></i></span><label>Notes</label></div>
-            <div class="fx21-field">
-              <input type="number" name="bill_amount" min="0" step="0.01" class="effect-21" placeholder=" ">
-              <span class="focus-border"><i></i></span><label>Bill Amount (₱, optional — 0 = no bill)</label></div>
+          </div>
+          <div class="form-section-card"><h4>Billing (fixed fee)</h4>
+            <div class="fee-preview">
+              <div class="fee-row"><span>Service fee</span>
+                <strong id="consultFee">₱0.00</strong></div>
+              <p id="consultInclusions" class="fee-inclusions">Select a service to see what is included.</p>
+              <small id="consultBillNote" class="text-muted">An unpaid invoice is issued when the fee is above zero.</small>
+            </div>
           </div>
         </div>
         <div class="vet-modal-footer">
@@ -143,4 +158,60 @@
       </form>
     </div>
   </div>
+
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var modal = document.getElementById('logConsultModal');
+    if (!modal) return;
+    var apptSel = modal.querySelector('select[name="appointment_id"]');
+    var svcSel = modal.querySelector('select[name="service_id"]');
+    var vetSel = modal.querySelector('select[name="vet_id"]');
+    var feeOut = document.getElementById('consultFee');
+    var incOut = document.getElementById('consultInclusions');
+    var noteOut = document.getElementById('consultBillNote');
+
+    function syncFee() {
+      var opt = svcSel && svcSel.options[svcSel.selectedIndex];
+      var fee = opt ? parseFloat(opt.dataset.fee || '0') : 0;
+      if (feeOut) feeOut.textContent = '₱' + fee.toLocaleString('en-PH',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (incOut) incOut.textContent = (opt && opt.dataset.inclusions) ||
+        'No inclusions listed for this service.';
+      if (noteOut) noteOut.textContent = fee > 0
+        ? 'Saving issues an unpaid invoice for this amount.'
+        : 'No bill is issued because this service has a zero fee.';
+    }
+    function pickService(name) {
+      if (!svcSel || !name) return;
+      var want = name.trim().toLowerCase();
+      Array.prototype.forEach.call(svcSel.options, function (o) {
+        if (!o.dataset.name) return;
+        if (o.dataset.name.trim().toLowerCase() === want && svcSel.value !== o.value) {
+          svcSel.value = o.value;
+        }
+      });
+    }
+    function syncAppt() {
+      var opt = apptSel && apptSel.options[apptSel.selectedIndex];
+      if (opt) {
+        pickService(opt.dataset.service || '');
+        if (opt.dataset.vet && vetSel) vetSel.value = opt.dataset.vet;
+      }
+      syncFee();
+    }
+    if (apptSel) apptSel.addEventListener('change', syncAppt);
+    if (svcSel) svcSel.addEventListener('change', syncFee);
+    syncAppt();
+
+    {% if log_appt %}
+    if (apptSel) apptSel.value = '{{ log_appt }}';
+    syncAppt();
+    openVetModal('logConsultModal');
+    setTimeout(function () {
+      var dx = modal.querySelector('textarea[name="diagnosis"]');
+      if (dx) dx.focus();
+    }, 300);
+    {% endif %}
+  });
+  </script>
 {% endblock %}

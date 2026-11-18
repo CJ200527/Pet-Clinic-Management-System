@@ -11,18 +11,62 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Decision shell: forms with .needs-confirm show it instead of native confirm().
+  // Forms marked data-confirm-password also collect the admin's own password.
   const shell = document.getElementById('decisionModal');
   const title = document.getElementById('decisionTitle');
   const msg = document.getElementById('decisionMsg');
   const go = document.getElementById('decisionGo');
+  const pwWrap = document.getElementById('decisionPwWrap');
+  const pwInput = document.getElementById('decisionPassword');
+  const pwHint = document.getElementById('decisionPwHint');
   let pendingForm = null;
+  let needsPassword = false;
+
+  function resetDecisionPassword(required) {
+    needsPassword = required;
+    if (pwWrap) pwWrap.hidden = !required;
+    if (pwHint) pwHint.hidden = !required;
+    if (pwInput) {
+      pwInput.value = '';
+      pwInput.required = required;
+      pwInput.type = 'password';
+      pwInput.classList.remove('has-content');
+    }
+  }
+
   if (shell) {
     shell.querySelectorAll('[data-decision-close]').forEach((b) => {
-      b.addEventListener('click', () => closeVetModal('decisionModal'));
+      b.addEventListener('click', () => {
+        pendingForm = null;
+        closeVetModal('decisionModal');
+      });
     });
     go?.addEventListener('click', () => {
+      if (!pendingForm) { closeVetModal('decisionModal'); return; }
+      if (needsPassword && pwInput && !pwInput.value.trim()) {
+        pwInput.classList.add('is-invalid');
+        pwInput.focus();
+        return; // keep the shell open until a password is typed
+      }
+      const form = pendingForm;
+      pendingForm = null;
+      if (needsPassword && pwInput) {
+        let hidden = form.querySelector('input[data-decision-password]');
+        if (!hidden) {
+          hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.name = 'admin_password';
+          hidden.dataset.decisionPassword = '1';
+          form.appendChild(hidden);
+        }
+        hidden.value = pwInput.value;
+      }
       closeVetModal('decisionModal');
-      if (pendingForm) { const f = pendingForm; pendingForm = null; f.submit(); }
+      form.submit();
+    });
+    pwInput?.addEventListener('input', () => pwInput.classList.remove('is-invalid'));
+    pwInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); go?.click(); }
     });
   }
   document.querySelectorAll('form.needs-confirm').forEach((form) => {
@@ -32,7 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
       pendingForm = form;
       if (title) title.textContent = form.dataset.confirmTitle || 'Please confirm';
       if (msg) msg.textContent = form.dataset.confirmMsg || 'Proceed with this action?';
+      resetDecisionPassword(form.dataset.confirmPassword === 'required');
       openVetModal('decisionModal');
+    });
+  });
+
+  // Prevent double submits from modal Save buttons; restore on bfcache return.
+  document.querySelectorAll('.vet-overlay .btn-modal-save').forEach((b) => {
+    b.dataset.label = b.textContent;
+    b.form?.addEventListener('submit', () => {
+      b.disabled = true;
+      b.textContent = 'Saving…';
+    });
+  });
+  window.addEventListener('pageshow', () => {
+    document.querySelectorAll('.vet-overlay .btn-modal-save').forEach((b) => {
+      if (b.disabled) { b.disabled = false; b.textContent = b.dataset.label || 'Save'; }
     });
   });
 });
@@ -40,10 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function openVetModal(id) {
   const m = document.getElementById(id);
   if (!m) return;
+  const body = m.querySelector('.vet-modal-body');
+  if (body) body.scrollTop = 0;
   m.classList.add('open');
   m.setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-lock');
-  const first = m.querySelector('input:not([type=hidden]), select, textarea');
+  const fields = m.querySelectorAll('input:not([type=hidden]), select, textarea');
+  const first = Array.from(fields).find((el) => el.offsetParent !== null);
   if (first) setTimeout(() => first.focus(), 120);
 }
 function closeVetModal(id) {
@@ -54,4 +116,12 @@ function closeVetModal(id) {
   if (!document.querySelector('.vet-overlay.open')) {
     document.body.classList.remove('modal-lock');
   }
+}
+function togglePwVisibility(btn) {
+  const input = btn.closest('.fx21-field')?.querySelector('input');
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.title = show ? 'Hide password' : 'Show password';
+  btn.setAttribute('aria-label', btn.title);
 }

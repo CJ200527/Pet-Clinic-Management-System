@@ -3,13 +3,7 @@
 {% block content %}
 {% set page_title = "Invoices" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="kpi-card"><div class="kpi-main">
       <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
       <div><div class="kpi-title">Unpaid Bills</div><div class="kpi-value">{{ vkpi.unpaid_n }}</div></div>
@@ -39,7 +33,6 @@
     <a class="tool-btn" title="Refresh List"
        href="{{ url_for('admin_invoices', period=period, q=q, vstatus=vstatus) }}">
       <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
-    <div class="bar-spacer"></div>
     <div class="filter-wrap">
       <button type="button" class="tool-btn" id="barFilterBtn" title="Filters">
         <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
@@ -69,6 +62,7 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
     {% if session.role == 'admin' %}
     <button class="btn-add" onclick="openVetModal('issueModal');return false;">
       <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Issue Bill</button>
@@ -76,16 +70,16 @@
   </div>
 
   <div class="card shadow-sm table-card-fill"><div class="card-body">
-    <h5>Recent Invoices</h5>
+    <h5>Invoices{% if pager %} ({{ pager.total }}){% endif %}</h5>
     {% if invoices %}
-    <div class="table-responsive-sm">
+    <div class="table-responsive-sm table-scroll">
     <table class="table table-sm align-middle">
       <thead><tr><th>#</th><th>Owner</th><th>Amount</th><th>Status</th><th>Issued</th>
-        <th class="text-end">Actions</th></tr></thead>
+        <th>Actions</th></tr></thead>
       <tbody>{% for i in invoices %}
         <tr><td>{{ i.id }}</td><td>{{ i.owner_name }}</td><td>₱{{ i.amount }}</td>
             <td><span class="badge badge-{{ i.status }}">{{ i.status }}</span></td>
-            <td><small>{{ i.issued_date }}</small></td>
+            <td><small>{{ i.issued_date|pretty_when }}</small></td>
             <td class="action-cell">
               <a class="icon-act icon-view" title="Print receipt" target="_blank"
                  href="{{ url_for('admin_invoice_receipt', inv_id=i.id) }}">
@@ -94,7 +88,8 @@
               <form method="POST" action="{{ url_for('admin_invoice_status', inv_id=i.id) }}"
                     class="d-inline needs-confirm"
                       data-confirm-title="Mark paid"
-                      data-confirm-msg="Mark invoice #{{ i.id }} as paid?">
+                      data-confirm-msg="Mark invoice #{{ i.id }} as paid?"
+                      data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="paid">
                 <button class="icon-act icon-approve" title="Mark paid">
@@ -103,7 +98,8 @@
               <form method="POST" action="{{ url_for('admin_invoice_status', inv_id=i.id) }}"
                     class="d-inline needs-confirm"
                       data-confirm-title="Cancel invoice"
-                      data-confirm-msg="Cancel invoice #{{ i.id }}?">
+                      data-confirm-msg="Cancel invoice #{{ i.id }}?"
+                      data-confirm-password="required">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
                 <input type="hidden" name="status" value="cancelled">
                 <button class="icon-act icon-reject" title="Cancel">
@@ -116,6 +112,8 @@
     </div>
     {% else %}<p class="text-muted mb-0">No invoices yet.</p>{% endif %}
   </div></div>
+
+  {% include "admin/_pager.html" %}
 
   {% if session.role == 'admin' %}
   <!-- Issue modal (CPSC shell) -->

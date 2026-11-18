@@ -3,13 +3,7 @@
 {% block content %}
 {% set page_title = "Clinic Queue" %}
 {% include "admin/_page_header.html" %}
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-
-  <div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="kpi-card"><div class="kpi-main">
       <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
       <div><div class="kpi-title">Waiting</div><div class="kpi-value">{{ qkpi.waiting }}</div></div>
@@ -23,7 +17,7 @@
       <div><div class="kpi-title">Done</div><div class="kpi-value">{{ qkpi.done }}</div></div>
     </div><div class="kpi-sub">Completed visits</div></div>
     <div class="kpi-card"><div class="kpi-main">
-      <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></span>
+      <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#i-skip"></use></svg></span>
       <div><div class="kpi-title">Skipped</div><div class="kpi-value">{{ qkpi.skipped }}</div></div>
     </div><div class="kpi-sub">No-shows</div></div>
   </div>
@@ -94,68 +88,101 @@
         </form>
       </div>
     </div>
+    <div class="bar-spacer"></div>
+    <button class="btn-add" onclick="openVetModal('queueAddModal');return false;">
+      <svg class="ic" aria-hidden="true"><use href="#i-plus"></use></svg>Add to Queue</button>
   </div>
 
-  <div class="row g-3">
-    <div class="col-md-7"><div class="card shadow-sm table-card-fill"><div class="card-body">
-      <h5>Now Serving / Waiting</h5>
-      {% if queue %}
-      <div class="table-responsive-sm">
-      <table class="table table-sm align-middle">
-        <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Vet</th><th>Status</th>
-          <th class="text-end">Actions</th></tr></thead>
-        <tbody>{% for e in queue %}
-          <tr><td><strong>{{ e.queue_number }}</strong></td><td><small>{{ e.queue_date }}</small></td>
-              <td>{{ e.pet_name }} / {{ e.owner_name }}</td>
-              <td>{{ e.vet_name or 'TBD' }}</td>
-              <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
-              <td class="action-cell">
-                {% if e.status == 'waiting' %}
-                <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
+  <div class="card shadow-sm table-card-fill"><div class="card-body">
+    <h5>Queue Entries</h5>
+    {% if queue %}
+    <div class="table-responsive-sm table-scroll">
+    <table class="table table-sm align-middle">
+      <thead><tr><th>#</th><th>Date</th><th>Pet / Owner</th><th>Vet</th><th>Status</th>
+        <th>Actions</th></tr></thead>
+      <tbody>{% for e in queue %}
+        <tr><td><strong>{{ e.queue_number }}</strong></td><td><small>{{ e.queue_date|pretty_date }}</small></td>
+            <td>{{ e.pet_name }} / {{ e.owner_name }}</td>
+            <td>{{ e.vet_name or 'TBD' }}</td>
+            <td><span class="badge badge-{{ e.status }}">{{ e.status|capitalize }}</span></td>
+            <td class="action-cell">
+              {% if e.status == 'waiting' %}
+              <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-                  <input type="hidden" name="status" value="serving">
-                  <button class="icon-act icon-approve" title="Start serving">
-                    <svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></button>
-                </form>
-                {% endif %}
-                {% if e.status in ('waiting', 'serving') %}
-                <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
+                <input type="hidden" name="status" value="serving">
+                <button class="icon-act icon-serve" title="Start serving">
+                  <svg class="ic" aria-hidden="true"><use href="#i-play"></use></svg></button>
+              </form>
+              {% endif %}
+              {% if e.status in ('waiting', 'serving') %}
+              <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-                  <input type="hidden" name="status" value="done">
-                  <button class="icon-act icon-view" title="Mark done">
-                    <svg class="ic" aria-hidden="true"><use href="#i-view"></use></svg></button>
-                </form>
-                <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline needs-confirm"
-                      data-confirm-title="Skip queue"
-                      data-confirm-msg="Skip #{{ e.queue_number }}?">
+                <input type="hidden" name="status" value="done">
+                <button class="icon-act icon-approve" title="Mark done">
+                  <svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_queue_status', qid=e.id) }}" class="d-inline needs-confirm"
+                    data-confirm-title="Skip queue"
+                    data-confirm-msg="Skip ticket #{{ e.queue_number }} for {{ e.pet_name }}?">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-                  <input type="hidden" name="status" value="skipped">
-                  <button class="icon-act icon-reject" title="Skip">
-                    <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
-                </form>
-                {% endif %}
-              </td></tr>
-        {% endfor %}</tbody>
-      </table>
-      </div>
-      {% else %}<p class="text-muted">Queue is empty for this view.</p>{% endif %}
-    </div></div></div>
-    <div class="col-md-5"><div class="card shadow-sm"><div class="card-body">
-      <h5>Add Approved Appointment</h5>
-      {% if session.role == 'admin' %}
+                <input type="hidden" name="status" value="skipped">
+                <button class="icon-act icon-skip" title="Skip ticket">
+                  <svg class="ic" aria-hidden="true"><use href="#i-skip"></use></svg></button>
+              </form>
+              {% endif %}
+              {% if session.role == 'admin' %}
+              <form method="POST" action="{{ url_for('admin_queue_delete', qid=e.id) }}" class="d-inline needs-confirm"
+                    data-confirm-title="Delete queue ticket"
+                    data-confirm-msg="Delete ticket #{{ e.queue_number }} for {{ e.pet_name }}? This cannot be undone."
+                    data-confirm-password="required">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+                <button class="icon-act icon-del" title="Delete ticket">
+                  <svg class="ic" aria-hidden="true"><use href="#i-x"></use></svg></button>
+              </form>
+              {% endif %}
+            </td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    {% else %}<p class="text-muted">Queue is empty for this view.</p>{% endif %}
+  </div></div>
+
+  {% include "admin/_pager.html" %}
+
+  <!-- Add to queue (CPSC shell) -->
+  <div class="vet-overlay" id="queueAddModal" aria-hidden="true">
+    <div class="vet-modal-box">
       {% if eligible %}
       <form method="POST" action="{{ url_for('admin_queue') }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <div class="mb-2"><label class="form-label">Appointment</label>
-          <select name="appointment_id" class="form-select" required>
-            {% for a in eligible %}
-            <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} ({{ a.appointment_date }})</option>
-            {% endfor %}
-          </select></div>
-        <button class="btn btn-success w-100">Add to Queue</button>
+        <div class="vet-modal-header"><h3>Add to Queue</h3>
+          <p>Pick an approved appointment for today’s line.</p></div>
+        <div class="vet-modal-body">
+          <div class="form-section-card"><h4>Appointment</h4>
+            <div class="fx21-field">
+              <select name="appointment_id" class="effect-21" required>
+                {% for a in eligible %}
+                <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} ({{ a.appointment_date|pretty_date }})</option>
+                {% endfor %}
+              </select>
+              <span class="focus-border"><i></i></span><label>Approved appointment</label></div>
+          </div>
+        </div>
+        <div class="vet-modal-footer">
+          <button type="button" class="btn-modal-cancel" onclick="closeVetModal('queueAddModal')">Cancel</button>
+          <button type="submit" class="btn-modal-save">Add to Queue</button>
+        </div>
       </form>
-      {% else %}<p class="text-muted mb-0">No approved appointments waiting to queue.</p>{% endif %}
-      {% else %}<p class="text-muted mb-0">Queue additions are done by Admin.</p>{% endif %}
-    </div></div></div>
+      {% else %}
+      <div class="vet-modal-header"><h3>Add to Queue</h3>
+        <p>No approved appointments are waiting to be queued.</p></div>
+      <div class="vet-modal-body">
+        <p class="text-muted mb-0">Approve a booking in the Appointments ledger first.</p>
+      </div>
+      <div class="vet-modal-footer">
+        <button type="button" class="btn-modal-cancel" onclick="closeVetModal('queueAddModal')">Close</button>
+      </div>
+      {% endif %}
+    </div>
   </div>
 {% endblock %}

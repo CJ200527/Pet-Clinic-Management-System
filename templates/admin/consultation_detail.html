@@ -5,14 +5,12 @@
 {% set show_filter = False %}
 {% include "admin/_page_header.html" %}
   <h3>Consultation #{{ consult.id }} — {{ consult.pet_name }}</h3>
-  <p class="text-muted">{{ consult.consultation_date }} · Attending vet:
-    <strong>Dr. {{ consult.vet_name }}</strong></p>
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% for category, msg in messages %}
-      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-    {% endfor %}
-  {% endwith %}
-  <div class="row g-3">
+  <p class="text-muted">{{ consult.consultation_date|pretty_when }} · Attending vet:
+    <strong>Dr. {{ consult.vet_name }}</strong> · Service:
+    <strong>{{ consult.service_name or '—' }}</strong>
+    {% if consult.service_fee is not none %} · Fee:
+    <strong>₱{{ '%.2f'|format(consult.service_fee) }}</strong>{% endif %}</p>
+<div class="row g-3">
     <div class="col-md-6"><div class="card shadow-sm"><div class="card-body">
       <h5>Diagnosis</h5><p>{{ consult.diagnosis }}</p>
       <h5>Treatment</h5><p>{{ consult.treatment or '-' }}</p>
@@ -24,7 +22,7 @@
       <ul class="list-group mb-3">
         {% for r in rxs %}
         <li class="list-group-item">
-          <strong>{{ r.item_name or 'General treatment' }}</strong> × {{ r.quantity_used }}
+          <strong>{{ r.item_name or 'General treatment' }}</strong>{% if r.quantity_used and r.quantity_used > 1 %} × {{ r.quantity_used }}{% endif %}
           {% if r.dosage %}<span class="text-muted">({{ r.dosage }})</span>{% endif %}
           {% if r.instructions %}<br><small>{{ r.instructions }}</small>{% endif %}
         </li>
@@ -35,20 +33,11 @@
       <hr><h6>Add Prescription</h6>
       <form method="POST" action="{{ url_for('admin_consultation_detail', consult_id=consult.id) }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-        <div class="mb-2"><label class="form-label">Inventory item (optional)</label>
-          <select name="inventory_id" class="form-select">
-            <option value="">-- none (general treatment) --</option>
-            {% for i in items %}
-            <option value="{{ i.id }}">{{ i.item_name }} ({{ i.quantity }} left)</option>
-            {% endfor %}
-          </select>
-          <div class="form-text">Stock is deducted automatically.</div></div>
-        <div class="row">
-          <div class="col-6 mb-2"><label class="form-label">Dosage</label>
-            <input type="text" name="dosage" class="form-control" placeholder="e.g. 2x daily"></div>
-          <div class="col-6 mb-2"><label class="form-label">Qty</label>
-            <input type="number" name="quantity_used" value="1" min="1" class="form-control"></div>
-        </div>
+        <div class="mb-2"><label class="form-label">Medicine / treatment</label>
+          <input type="text" name="medicine_name" class="form-control"
+                 placeholder="e.g. Amoxicillin 250 mg"></div>
+        <div class="mb-2"><label class="form-label">Dosage</label>
+          <input type="text" name="dosage" class="form-control" placeholder="e.g. 2x daily for 5 days"></div>
         <div class="mb-2"><label class="form-label">Instructions</label>
           <textarea name="instructions" class="form-control" rows="2"></textarea></div>
         <button class="btn btn-success w-100">Add</button>

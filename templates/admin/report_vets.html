@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+{% block title %}Vets Report - Pet Clinic{% endblock %}
+{% block content %}
+
+{% set page_title = "Vets Report" %}
+{% include "admin/_page_header.html" %}
+
+<div class="kpi-grid" style="grid-template-columns: repeat(4, 1fr);">
+  <div class="kpi-card"><div class="kpi-main">
+    <span class="kpi-badge badge-sky"><svg class="ic" aria-hidden="true"><use href="#i-stethoscope"></use></svg></span>
+    <div><div class="kpi-title">In Directory</div><div class="kpi-value">{{ rkpi.total }}</div></div>
+  </div><div class="kpi-sub">All-time</div></div>
+  <div class="kpi-card"><div class="kpi-main">
+    <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
+    <div><div class="kpi-title">Active Now</div><div class="kpi-value">{{ rkpi.active }}</div></div>
+  </div><div class="kpi-sub">Seeing patients</div></div>
+  <div class="kpi-card"><div class="kpi-main">
+    <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#i-pulse"></use></svg></span>
+    <div><div class="kpi-title">Consults</div><div class="kpi-value">{{ rkpi.consults }}</div></div>
+  </div><div class="kpi-sub">{{ period }}</div></div>
+  <div class="kpi-card"><div class="kpi-main">
+    <span class="kpi-badge badge-slate"><svg class="ic" aria-hidden="true"><use href="#i-calendar"></use></svg></span>
+    <div><div class="kpi-title">On Duty Today</div><div class="kpi-value">{{ rkpi.today }}</div></div>
+  </div><div class="kpi-sub">Booked with visits</div></div>
+</div>
+
+<div class="action-bar">
+  <form method="GET" action="{{ url_for('admin_report_register', kind='vets') }}" class="search-box">
+    <input type="hidden" name="period" value="{{ period }}">
+    <input type="hidden" name="vstatus" value="{{ vstatus }}">
+    <input type="text" name="q" class="form-control" placeholder="Search vet or specialty…"
+           value="{{ q or '' }}" autocomplete="off">
+    <button class="btn btn-outline-primary">Search</button>
+  </form>
+  <a class="tool-btn" title="Refresh"
+     href="{{ url_for('admin_report_register', kind='vets', period=period, vstatus=vstatus, q=q) }}">
+    <svg class="ic" aria-hidden="true"><use href="#i-refresh"></use></svg></a>
+  <button type="button" class="tool-btn" title="Print report" onclick="window.print()">
+    <svg class="ic" aria-hidden="true"><use href="#i-print"></use></svg></button>
+  <div class="filter-wrap">
+    <button type="button" class="tool-btn" title="Filters">
+      <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+      {% if vstatus != 'all' or period != 'All Time' %}<span class="notif-badge">•</span>{% endif %}</button>
+    <div class="filter-panel">
+      <form method="GET" action="{{ url_for('admin_report_register', kind='vets') }}">
+        <input type="hidden" name="q" value="{{ q or '' }}">
+        <div class="filter-cat"><strong>Period</strong></div>
+        {% for p in periods %}
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="period" value="{{ p }}"
+                 id="rper{{ loop.index }}" {% if p == period %}checked{% endif %}>
+          <label class="form-check-label" for="rper{{ loop.index }}">{{ p }}</label>
+        </div>
+        {% endfor %}
+        <div class="filter-cat mt-2"><strong>Status</strong></div>
+        <select name="vstatus" class="form-select form-select-sm">
+          <option value="all" {% if vstatus == 'all' %}selected{% endif %}>All vets</option>
+          <option value="active" {% if vstatus == 'active' %}selected{% endif %}>Active</option>
+          <option value="inactive" {% if vstatus == 'inactive' %}selected{% endif %}>Inactive</option>
+        </select>
+        <div class="d-flex gap-2 mt-3">
+          <a class="btn btn-sm btn-outline-secondary flex-fill"
+             href="{{ url_for('admin_report_register', kind='vets') }}">Clear</a>
+          <button class="btn btn-sm flex-fill text-white" style="background:var(--vet);">Apply</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="bar-spacer"></div>
+  <a class="btn-add" href="{{ url_for('admin_reports') }}">
+    <svg class="ic" aria-hidden="true"><use href="#i-chevron-left"></use></svg>Reports Menu</a>
+</div>
+
+<div class="card shadow-sm table-card-fill"><div class="card-body">
+  {% if rows %}
+  <div class="table-responsive-sm table-scroll">
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Vet</th><th>Specialty</th><th>Phone</th><th>Consults</th><th>Status</th></tr></thead>
+    <tbody>{% for v in rows %}
+      <tr><td>{{ v.full_name|person_name }}</td><td>{{ v.specialty or '—' }}</td>
+          <td>{{ v.phone or '—' }}</td><td>{{ v.consults }}</td>
+          <td>{% if v.is_active %}<span class="badge badge-approved">Active</span>
+              {% else %}<span class="badge badge-cancelled">Inactive</span>{% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="text-muted mb-0">No vets in this view.</p>{% endif %}
+</div></div>
+
+{% include "admin/_pager.html" %}
+{% endblock %}

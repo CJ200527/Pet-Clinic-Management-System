@@ -3,17 +3,33 @@
 {% block content %}
 
 {% set page_title = "Pet Clinic Management" %}
-{% set full_header = True %}
 {% include "admin/_page_header.html" %}
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-  {% for category, msg in messages %}
-    <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-  {% endfor %}
-{% endwith %}
+{% macro card_filter(key, title) %}
+<div class="filter-wrap">
+  <button type="button" class="tool-btn" title="Filter {{ title|lower }}">
+    <svg class="ic" aria-hidden="true"><use href="#i-filter"></use></svg>
+    {% if card_periods[key] != 'All Time' %}<span class="notif-badge">•</span>{% endif %}
+  </button>
+  <div class="filter-panel">
+    <div class="filter-cat"><strong>{{ title }} period</strong></div>
+    <div class="chart-period-list">
+      {% for p in periods %}
+      <a class="chart-period-link {{ 'is-active' if p == card_periods[key] }}"
+         href="{{ url_for('admin_dashboard',
+              bk=(p if key == 'bookings' else card_periods.bookings),
+              qp=(p if key == 'queue' else card_periods.queue),
+              rev=(p if key == 'revenue' else card_periods.revenue),
+              svc=(p if key == 'services' else card_periods.services),
+              rec=(p if key == 'recent' else card_periods.recent)) }}">{{ p }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endmacro %}
 
-<!-- KPI row (5 cards) -->
-<div class="kpi-grid">
+<!-- KPI row (4 snapshot cards) -->
+<div class="kpi-grid kpi-grid-4">
   <a class="kpi-card" href="{{ url_for('admin_appointments', status='pending') }}">
     <div class="kpi-main">
       <span class="kpi-badge badge-amber"><svg class="ic" aria-hidden="true"><use href="#k-pending"></use></svg></span>
@@ -28,13 +44,6 @@
     </div>
     <div class="kpi-sub">Waiting + serving now</div>
   </a>
-  <a class="kpi-card" href="{{ url_for('admin_inventory') }}">
-    <div class="kpi-main">
-      <span class="kpi-badge badge-red"><svg class="ic" aria-hidden="true"><use href="#k-alert"></use></svg></span>
-      <div><div class="kpi-title">Low Stock Alert</div><div class="kpi-value">{{ kpi.lowstock }}</div></div>
-    </div>
-    <div class="kpi-sub">Items at or below 5 units</div>
-  </a>
   <a class="kpi-card" href="{{ url_for('admin_invoices') }}">
     <div class="kpi-main">
       <span class="kpi-badge badge-green"><svg class="ic" aria-hidden="true"><use href="#k-bill"></use></svg></span>
@@ -47,7 +56,7 @@
       <span class="kpi-badge badge-slate"><svg class="ic" aria-hidden="true"><use href="#k-check"></use></svg></span>
       <div><div class="kpi-title">Consults Done</div><div class="kpi-value">{{ kpi.consults }}</div></div>
     </div>
-    <div class="kpi-sub">{{ period }}</div>
+    <div class="kpi-sub">Today</div>
   </a>
 </div>
 
@@ -78,73 +87,100 @@
   </div>
 </div>
 
-<!-- Analytics -->
+<!-- Analytics: every card has its own period filter -->
 <div class="analytics-grid">
-  <div class="chart-card"><h6>Bookings Trend <small class="text-muted">{{ period }}</small></h6>
-    <div class="chart-box"><canvas id="chBookings"></canvas></div></div>
-  <div class="chart-card"><h6>Queue Load <small class="text-muted">Today</small></h6>
-    <div class="chart-box"><canvas id="chQueue"></canvas></div></div>
-  <div class="chart-card"><h6>Revenue <small class="text-muted">{{ period }}</small></h6>
-    <div class="chart-box"><canvas id="chRevenue"></canvas></div></div>
-  <div class="chart-card"><h6>Top Services <small class="text-muted">{{ period }}</small></h6>
-    <div class="chart-box"><canvas id="chServices"></canvas></div></div>
+  <div class="chart-card">
+    <div class="chart-head">
+      <h6>Bookings Trend <small class="text-muted">{{ card_periods.bookings }}</small></h6>
+      {{ card_filter('bookings', 'Bookings') }}
+    </div>
+    <div class="chart-box"><canvas id="chBookings"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-head">
+      <h6>Queue Load <small class="text-muted">{{ card_periods.queue }}</small></h6>
+      {{ card_filter('queue', 'Queue') }}
+    </div>
+    <div class="chart-box"><canvas id="chQueue"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-head">
+      <h6>Revenue <small class="text-muted">{{ card_periods.revenue }}</small></h6>
+      {{ card_filter('revenue', 'Revenue') }}
+    </div>
+    <div class="chart-box"><canvas id="chRevenue"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <div class="chart-head">
+      <h6>Top Services <small class="text-muted">{{ card_periods.services }}</small></h6>
+      {{ card_filter('services', 'Services') }}
+    </div>
+    <div class="chart-box"><canvas id="chServices"></canvas></div>
+  </div>
 </div>
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}?v=20261008"></script>
 <script>
 (function () {
   const data = {{ (charts or {})|tojson }};
-  if (!data.labels || !window.Chart) return;
-  const teal = ['#0f766e', '#14b8a6', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6'];
+  if (!window.Chart) return;
+  const teal = '#0f766e';
   const mk = (id, cfg) => {
     const el = document.getElementById(id);
     if (el) new Chart(el, cfg);
   };
   const fill = { responsive: true, maintainAspectRatio: false };
+  const bookings = data.bookings || { labels: [], values: [] };
   mk('chBookings', { type: 'bar',
-    data: { labels: data.labels,
-      datasets: [{ data: data.bookings, backgroundColor: '#0f766e', borderRadius: 4,
+    data: { labels: bookings.labels,
+      datasets: [{ data: bookings.values, backgroundColor: teal, borderRadius: 4,
         categoryPercentage: 0.85, barPercentage: 0.9 }] },
     options: { ...fill, plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } } });
-  const qSum = (data.queue_load || []).reduce((a, b) => a + b, 0);
+  const queue = data.queue || { labels: [], values: [] };
+  const qSum = (queue.values || []).reduce((a, b) => a + b, 0);
   const qEmpty = qSum === 0;
   mk('chQueue', { type: 'doughnut',
-    data: { labels: qEmpty ? ['No queue today'] : ['Waiting', 'Serving', 'Done', 'Skipped'],
-      datasets: [{ data: qEmpty ? [1] : data.queue_load,
+    data: { labels: qEmpty ? ['No queue in this period'] : queue.labels,
+      datasets: [{ data: qEmpty ? [1] : queue.values,
         backgroundColor: qEmpty ? ['#e2e8f0'] : ['#f59e0b', '#14b8a6', '#2e7d32', '#ef4444'] }] },
     options: { ...fill, layout: { padding: 8 }, cutout: '62%',
       plugins: { legend: { position: 'bottom', align: 'center' },
         tooltip: { enabled: !qEmpty } } } });
+  const services = data.services || { labels: [], values: [] };
   mk('chServices', { type: 'bar',
-    data: { labels: data.services,
-      datasets: [{ data: data.service_counts, backgroundColor: '#14b8a6', borderRadius: 4,
+    data: { labels: services.labels,
+      datasets: [{ data: services.values, backgroundColor: '#14b8a6', borderRadius: 4,
         categoryPercentage: 0.7, barPercentage: 0.9 }] },
     options: { ...fill, indexAxis: 'y', plugins: { legend: { display: false } },
       scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } } });
+  const revenue = data.revenue || { labels: [], values: [] };
   mk('chRevenue', { type: 'line',
-    data: { labels: data.labels,
-      datasets: [{ data: data.revenue, borderColor: '#0f766e', backgroundColor: 'rgba(15,118,110,.15)',
+    data: { labels: revenue.labels,
+      datasets: [{ data: revenue.values, borderColor: teal, backgroundColor: 'rgba(15,118,110,.15)',
         fill: true, tension: .35 }] },
     options: { ...fill, plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true } } } });
 })();
 </script>
 
-<!-- Approvals live in the Appointments ledger (pending KPI card links there) -->
-
 <!-- Recent activity -->
 <div class="card shadow-sm"><div class="card-body">
-  <h5>Recent Activity <small class="text-muted">({{ period }})</small></h5>
+  <div class="chart-head">
+    <h5>Recent Activity <small class="text-muted">({{ card_periods.recent }})</small></h5>
+    {{ card_filter('recent', 'Activity') }}
+  </div>
   {% if recent %}
+  <div class="table-responsive-sm">
   <table class="table table-sm align-middle mb-0">
     <thead><tr><th>#</th><th>Booked</th><th>Visit Date</th><th>Pet / Owner</th><th>Vet</th><th>Status</th></tr></thead>
     <tbody>{% for a in recent %}
-      <tr><td>{{ a.id }}</td><td><small>{{ a.created_at }}</small></td>
-          <td>{{ a.appointment_date }} {{ a.appointment_time }}</td>
+      <tr><td>{{ a.id }}</td><td><small>{{ a.created_at|pretty_when }}</small></td>
+          <td>{{ a.appointment_date|pretty_when(a.appointment_time) }}</td>
           <td>{{ a.pet_name }} / {{ a.owner_name }}</td><td>{{ a.vet_name or 'TBD' }}</td>
           <td><span class="badge bg-secondary">{{ a.status }}</span></td></tr>
     {% endfor %}</tbody>
   </table>
+  </div>
   {% else %}<p class="text-muted mb-0">No activity in this period.</p>{% endif %}
 </div></div>
 {% endblock %}

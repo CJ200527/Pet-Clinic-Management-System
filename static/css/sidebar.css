@@ -23,7 +23,7 @@
 .profile strong { display: block; color: #fff; font-size: .95rem; }
 .profile small { color: var(--side-muted); text-transform: capitalize; }
 .snav { display: flex; flex-direction: column; gap: .3rem; flex: 1 1 auto;
-  overflow-y: auto; min-height: 0; scrollbar-width: thin; }
+  overflow-y: auto; overflow-x: hidden; min-height: 0; scrollbar-width: thin; }
 .snav a { display: flex; align-items: center; gap: .75rem; padding: .58rem 1rem;
   border-radius: .9rem; color: var(--side-text); text-decoration: none; font-weight: 500; }
 .snav a:hover { background: var(--side-bg2); color: #fff; }
@@ -55,4 +55,22 @@
   .shell.nav-open .sidebar { transform: none; }
   .main { margin-left: 0; }
   .mobilebar { display: flex; }
+}
+
+/* v2 — teal-glass rail + CPSC hover motion (no photos anywhere) */
+.sidebar { background:
+  radial-gradient(600px 300px at -20% 0%, rgba(20,184,166,.22), transparent 60%),
+  linear-gradient(180deg, #0d2421 0%, #10302c 100%);
+  box-shadow: 8px 0 30px rgba(13,36,33,.16); }
+.snav a { transition: background .18s ease, color .18s ease, transform .18s ease,
+  box-shadow .18s ease; }
+.snav a:hover { transform: translateX(3px); }
+.snav a.active { box-shadow: 0 8px 20px rgba(20,184,166,.32); }
+.brand { transition: opacity .18s ease; }
+.brand:hover { opacity: .88; }
+.logout-btn { transition: background .18s ease, color .18s ease, transform .18s ease; }
+.logout-btn:hover { transform: translateY(-1px); }
+@media (prefers-reduced-motion: reduce) {
+  .snav a, .brand, .logout-btn { transition: none; }
+  .snav a:hover, .logout-btn:hover { transform: none; }
 }

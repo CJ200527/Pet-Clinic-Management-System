@@ -7,25 +7,29 @@
   <div class="row justify-content-center"><div class="col-md-7">
     <div class="card shadow-sm"><div class="card-body p-4">
       <h3>Log Consultation</h3>
-      <p class="text-muted">Saving sets the appointment to <strong>completed</strong>.</p>
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% for category, msg in messages %}
-          <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}">{{ msg }}</div>
-        {% endfor %}
-      {% endwith %}
-      {% if eligible %}
-      <form method="POST" action="{{ url_for('admin_consultation_new') }}">
+      <p class="text-muted">Saving sets the appointment to <strong>completed</strong> and issues the fixed service bill.</p>
+{% if eligible %}
+      <form method="POST" action="{{ url_for('admin_consultation_new') }}" id="consultForm">
         <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
         <div class="mb-3"><label class="form-label">Appointment</label>
-          <select name="appointment_id" class="form-select" required>
+          <select name="appointment_id" id="consultAppt" class="form-select" required>
             {% for a in eligible %}
-            <option value="{{ a.id }}">#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date }})</option>
+            <option value="{{ a.id }}" data-service="{{ a.reason }}"
+                    data-vet="{{ a.vet_id or '' }}" {% if prefill and prefill.id == a.id %}selected{% endif %}>#{{ a.id }} — {{ a.pet_name }} / {{ a.owner_name }} ({{ a.appointment_date|pretty_date }})</option>
             {% endfor %}
           </select></div>
+        <div class="mb-3"><label class="form-label">Service</label>
+          <select name="service_id" id="consultSvc" class="form-select" required>
+            {% for s in services %}
+            <option value="{{ s.id }}" data-name="{{ s.name }}" data-fee="{{ s.fee }}"
+                    data-inclusions="{{ s.inclusions or '' }}">{{ s.name }} — ₱{{ '%.2f'|format(s.fee) }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text" id="consultSvcInfo">What is included appears here.</div></div>
         <div class="mb-3"><label class="form-label">Attending Vet</label>
-          <select name="vet_id" class="form-select" required>
+          <select name="vet_id" id="consultVet" class="form-select" required>
             {% for v in active_vets %}
-            <option value="{{ v.id }}">Dr. {{ v.full_name }}</option>
+            <option value="{{ v.id }}" {% if prefill and prefill.vet_id == v.id %}selected{% endif %}>Dr. {{ v.full_name }}</option>
             {% endfor %}
           </select></div>
         <div class="mb-3"><label class="form-label">Diagnosis</label>
@@ -34,14 +38,54 @@
           <textarea name="treatment" class="form-control" rows="2"></textarea></div>
         <div class="mb-3"><label class="form-label">Notes</label>
           <textarea name="notes" class="form-control" rows="2"></textarea></div>
-        <div class="mb-3"><label class="form-label">Bill Amount (₱, optional)</label>
-          <input type="number" name="bill_amount" min="0" step="0.01" class="form-control"
-                 placeholder="Leave 0 for no bill — otherwise an unpaid bill is issued">
-          <div class="form-text">Filled = auto-issues an unpaid bill for this visit.</div></div>
+        <div class="fee-preview mb-3">
+          <div class="fee-row"><span>Fixed service fee</span><strong id="consultFee">₱0.00</strong></div>
+          <small id="consultBillNote" class="text-muted">An unpaid invoice is issued when the fee is above zero.</small>
+        </div>
         <button class="btn btn-success w-100">Save Consultation</button>
       </form>
       {% else %}<div class="alert alert-warning mb-0">No approved appointments to consult.</div>{% endif %}
       <a href="{{ url_for('admin_consultations') }}" class="btn btn-link mt-2">← Back to list</a>
     </div></div>
   </div></div>
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('consultForm');
+    if (!form) return;
+    var apptSel = document.getElementById('consultAppt');
+    var svcSel = document.getElementById('consultSvc');
+    var vetSel = document.getElementById('consultVet');
+    var feeOut = document.getElementById('consultFee');
+    var infoOut = document.getElementById('consultSvcInfo');
+    var noteOut = document.getElementById('consultBillNote');
+
+    function syncFee() {
+      var opt = svcSel && svcSel.options[svcSel.selectedIndex];
+      var fee = opt ? parseFloat(opt.dataset.fee || '0') : 0;
+      if (feeOut) feeOut.textContent = '₱' + fee.toLocaleString('en-PH',
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (infoOut) infoOut.textContent = (opt && opt.dataset.inclusions) ||
+        'No inclusions listed for this service.';
+      if (noteOut) noteOut.textContent = fee > 0
+        ? 'Saving issues an unpaid invoice for this amount.'
+        : 'No bill is issued because this service has a zero fee.';
+    }
+    function syncAppt() {
+      var opt = apptSel && apptSel.options[apptSel.selectedIndex];
+      if (opt) {
+        var want = (opt.dataset.service || '').trim().toLowerCase();
+        if (want) {
+          Array.prototype.forEach.call(svcSel.options, function (o) {
+            if (o.dataset.name && o.dataset.name.trim().toLowerCase() === want) svcSel.value = o.value;
+          });
+        }
+        if (opt.dataset.vet && vetSel) vetSel.value = opt.dataset.vet;
+      }
+      syncFee();
+    }
+    if (apptSel) apptSel.addEventListener('change', syncAppt);
+    if (svcSel) svcSel.addEventListener('change', syncFee);
+    syncAppt();
+  });
+  </script>
 {% endblock %}

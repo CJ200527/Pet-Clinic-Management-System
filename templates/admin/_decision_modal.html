@@ -2,7 +2,23 @@
 <div class="vet-overlay" id="decisionModal" aria-hidden="true">
   <div class="vet-modal-box decision">
     <div class="vet-modal-header"><h3 id="decisionTitle">Please confirm</h3></div>
-    <div class="vet-modal-body"><p class="text-muted" id="decisionMsg">Proceed with this action?</p></div>
+    <div class="vet-modal-body">
+      <p class="text-muted" id="decisionMsg">Proceed with this action?</p>
+      <div class="decision-pw" id="decisionPwWrap" hidden>
+        <div class="fx21-field">
+          <input type="password" id="decisionPassword" class="effect-21"
+                 placeholder=" " autocomplete="current-password">
+          <span class="focus-border"><i></i></span>
+          <label for="decisionPassword">Your admin password</label>
+          <button type="button" class="pw-toggle" title="Show password"
+                  aria-label="Show password" onmousedown="event.preventDefault()"
+                  onclick="togglePwVisibility(this)">
+            <svg class="ic" aria-hidden="true"><use href="#i-eye"></use></svg>
+          </button>
+        </div>
+        <small class="decision-pw-hint" id="decisionPwHint">Type your own password to confirm. Staff cannot do this.</small>
+      </div>
+    </div>
     <div class="vet-modal-footer">
       <button type="button" class="btn-modal-cancel" data-decision-close>Cancel</button>
       <button type="button" class="btn-modal-save" id="decisionGo">Confirm</button>

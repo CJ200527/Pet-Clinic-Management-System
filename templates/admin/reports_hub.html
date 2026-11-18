@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% block title %}Reports - Pet Clinic{% endblock %}
+{% block content %}
+
+{% set page_title = "Reports" %}
+{% include "admin/_page_header.html" %}
+
+<!-- Grouped report cards (CPSC hub pattern, clinic teal) -->
+<section class="report-groups">
+  {% for group in groups %}
+  <div class="report-group">
+    <div class="report-group-title">{{ group.label }}</div>
+    <div class="report-card-grid">
+      {% for card in group.cards %}
+      <a class="report-card" href="{{ url_for('admin_report_register', kind=card.kind) }}">
+        <span class="report-card-icon"><svg class="ic" aria-hidden="true"><use href="#{{ card.icon }}"></use></svg></span>
+        <span class="report-card-body">
+          <strong>{{ card.title }}</strong>
+          <span>{{ card.blurb }}</span>
+        </span>
+        <svg class="ic report-card-go" aria-hidden="true"><use href="#i-view"></use></svg>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="report-group">
+    <div class="report-group-title">Performance</div>
+    <div class="report-card-grid">
+      <a class="report-card is-wide" href="{{ url_for('admin_report_register', kind=wide.kind) }}">
+        <span class="report-card-icon"><svg class="ic" aria-hidden="true"><use href="#{{ wide.icon }}"></use></svg></span>
+        <span class="report-card-body">
+          <strong>{{ wide.title }}</strong>
+          <span>{{ wide.blurb }}</span>
+        </span>
+        <svg class="ic report-card-go" aria-hidden="true"><use href="#i-view"></use></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Record Lookup: jump straight to the ledger holding the typed record -->
+<div class="lookup-card">
+  <h2>Record Lookup</h2>
+  <p>Type a booking #, invoice #, queue ticket #, phone number or name to open
+     the ledger that holds it.</p>
+  <form class="lookup-form" method="GET" action="{{ url_for('admin_report_lookup') }}">
+    <input type="text" name="q" class="form-control" placeholder="e.g. 29, 7, 09123456789, Bantay"
+           autocomplete="off">
+    <button type="submit" class="btn btn-outline-primary">Open</button>
+  </form>
+</div>
+{% endblock %}

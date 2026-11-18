@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .env
+
+# Runtime photo uploads (created by Settings)
+static/uploads/

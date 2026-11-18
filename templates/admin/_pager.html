@@ -1,0 +1,31 @@
+{% if pager and pager.total %}
+<div class="table-pager">
+  <span class="pager-count">Showing {{ pager.start }}–{{ pager.end }} of {{ pager.total }}</span>
+  {% if pager.pages > 1 %}
+  <nav class="pager-nav" aria-label="Page navigation">
+    <a class="pager-btn{% if pager.page <= 1 %} is-disabled{% endif %}"
+       {% if pager.page > 1 %}href="{{ page_url(pager.page - 1) }}"{% endif %}
+       aria-label="Previous page">
+      <svg class="ic" aria-hidden="true"><use href="#i-chevron-left"></use></svg></a>
+    {% set lo = [1, pager.page - 2]|max %}
+    {% set hi = [pager.pages, lo + 4]|min %}
+    {% if lo > 1 %}
+    <a class="pager-btn" href="{{ page_url(1) }}">1</a>
+    {% if lo > 2 %}<span class="pager-gap">…</span>{% endif %}
+    {% endif %}
+    {% for n in range(lo, hi + 1) %}
+    <a class="pager-btn{% if n == pager.page %} is-active{% endif %}"
+       href="{{ page_url(n) }}">{{ n }}</a>
+    {% endfor %}
+    {% if hi < pager.pages %}
+    {% if hi < pager.pages - 1 %}<span class="pager-gap">…</span>{% endif %}
+    <a class="pager-btn" href="{{ page_url(pager.pages) }}">{{ pager.pages }}</a>
+    {% endif %}
+    <a class="pager-btn{% if pager.page >= pager.pages %} is-disabled{% endif %}"
+       {% if pager.page < pager.pages %}href="{{ page_url(pager.page + 1) }}"{% endif %}
+       aria-label="Next page">
+      <svg class="ic" aria-hidden="true"><use href="#i-chevron-right"></use></svg></a>
+  </nav>
+  {% endif %}
+</div>
+{% endif %}
